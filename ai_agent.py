@@ -93,6 +93,28 @@ GEMINI_FUNCTION_DECLARATIONS = [
         },
     },
     {
+        "name": "guardar_documento",
+        "description": "Genera y guarda un documento de texto (informe, reporte, resumen, carta, lista, etc.) en el escritorio del usuario. Úsala siempre que el usuario pida 'genera un documento', 'crea un informe', 'escribe un reporte', 'guarda un resumen', 'hazme una carta', etc.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "contenido": {
+                    "type": "string",
+                    "description": "Contenido completo del documento.",
+                },
+                "nombre_archivo": {
+                    "type": "string",
+                    "description": "Nombre del archivo con extensión (p.ej. 'reporte.txt', 'resumen.md', 'lista.csv'). Por defecto 'documento.txt'.",
+                },
+                "ruta_carpeta": {
+                    "type": "string",
+                    "description": "Carpeta de destino. Si se omite, se guarda en el escritorio.",
+                },
+            },
+            "required": ["contenido"],
+        },
+    },
+    {
         "name": "obtener_info_sistema",
         "description": "Retorna información básica del sistema operativo (SO, versión, arquitectura).",
         "parameters": {"type": "object", "properties": {}, "required": []},
@@ -126,6 +148,7 @@ Capacidades:
 - Leer y escribir en el portapapeles del sistema.
 - Abrir aplicaciones y proyectos en VS Code.
 - Guardar notas rápidas en el escritorio.
+- Generar y guardar documentos (informes, reportes, resúmenes, cartas, listas) en el escritorio.
 - Obtener información del sistema operativo.
 
 Reglas operativas:
@@ -133,6 +156,9 @@ Reglas operativas:
 2. Respuestas cortas por defecto; desarrolla solo cuando la complejidad lo exige.
 3. Usa la herramienta apropiada cuando el usuario pide ejecutar algo en la computadora.
 4. Si no sabes algo, dilo claramente. Nunca inventes información.
+5. Cuando el usuario pida crear o generar un documento (informe, reporte, resumen, carta,
+   lista u otro texto estructurado), usa siempre `guardar_documento` con el contenido
+   completo y un nombre de archivo descriptivo (p.ej. 'resumen_reunion.txt').
 """
 
 
@@ -155,6 +181,7 @@ class JarvisAgent:
     def __init__(self, provider: Optional[str] = None) -> None:
         self._provider = self._resolve_provider(provider)
         self._history: list[dict] = []
+        self.last_saved_path: Optional[str] = None  # última ruta de doc/nota guardada
 
         if self._provider == "gemini":
             self._init_gemini()
@@ -197,7 +224,7 @@ class JarvisAgent:
         genai.configure(api_key=os.environ["GEMINI_API_KEY"])
         tools = [{"function_declarations": GEMINI_FUNCTION_DECLARATIONS}]
         self._client = genai.GenerativeModel(
-            model_name="gemini-3.5-flash",
+            model_name="gemini-2.5-flash-lite",
             system_instruction=SYSTEM_PROMPT,
             tools=tools,
         )
@@ -240,6 +267,21 @@ class JarvisAgent:
         if self._provider == "gemini":
             return self._send_gemini(user_message)
         return self._send_openai(user_message)
+
+    def send_message_with_image(self, user_message: str, image_path: str) -> str:
+        """Envía un mensaje con imagen al LLM (visión multimodal).
+
+        Args:
+            user_message: Texto del usuario describiendo qué hacer con la imagen.
+            image_path: Ruta absoluta al archivo de imagen.
+
+        Returns:
+            str: Respuesta textual del asistente.
+        """
+        if self._provider == "gemini":
+            return self._send_gemini_with_image(user_message, image_path)
+        # OpenAI vision fallback — si no hay soporte, degradar a texto
+        return self._send_openai(f"[El usuario adjuntó una imagen: {image_path}]\n{user_message}")
 
     # ------------------------------------------------------------------
     # Implementación por proveedor
@@ -288,6 +330,46 @@ class JarvisAgent:
             response = self._chat.send_message(tool_responses)
 
         # Extraer texto de la respuesta final
+        try:
+            return response.text
+        except ValueError:
+            return "[No se pudo obtener una respuesta textual del modelo.]"
+
+    def _send_gemini_with_image(self, user_message: str, image_path: str) -> str:
+        """Envía texto + imagen a Gemini (visión multimodal)."""
+        import google.generativeai as genai  # type: ignore
+        from PIL import Image  # type: ignore
+
+        try:
+            img = Image.open(image_path)
+        except Exception as exc:
+            return f"[No se pudo abrir la imagen: {exc}]"
+
+        response = self._chat.send_message([user_message, img])
+
+        # Ciclo de function calling (igual que _send_gemini)
+        while True:
+            tool_calls = [
+                part.function_call
+                for candidate in response.candidates
+                for part in candidate.content.parts
+                if hasattr(part, "function_call") and part.function_call.name
+            ]
+            if not tool_calls:
+                break
+            tool_responses = []
+            for call in tool_calls:
+                resultado = self._execute_tool(call.name, dict(call.args))
+                tool_responses.append(
+                    genai.protos.Part(
+                        function_response=genai.protos.FunctionResponse(
+                            name=call.name,
+                            response={"result": resultado},
+                        )
+                    )
+                )
+            response = self._chat.send_message(tool_responses)
+
         try:
             return response.text
         except ValueError:
@@ -366,7 +448,10 @@ class JarvisAgent:
         if func is None:
             return f"[Herramienta '{nombre}' no encontrada.]"
         try:
-            return str(func(**args))
+            resultado = str(func(**args))
+            if nombre in ("guardar_nota", "guardar_documento") and "en: " in resultado:
+                self.last_saved_path = resultado.split("en: ", 1)[1].strip()
+            return resultado
         except TypeError as exc:
             return f"[Error de argumentos en '{nombre}': {exc}]"
         except Exception as exc:  # noqa: BLE001

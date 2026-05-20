@@ -175,6 +175,34 @@ def guardar_nota(texto: str, nombre_archivo: str = "jarvis_nota.txt") -> str:
         return f"[Error al guardar la nota: {exc}]"
 
 
+def guardar_documento(contenido: str, nombre_archivo: str = "documento.txt", ruta_carpeta: str = "") -> str:
+    """
+    Genera y guarda un documento de texto en el escritorio (o carpeta indicada).
+    Úsala cuando el usuario pida crear un informe, reporte, resumen, carta, lista u otro
+    documento con contenido estructurado.
+
+    Args:
+        contenido:      Texto completo del documento.
+        nombre_archivo: Nombre con extensión (p.ej. 'reporte.txt', 'resumen.md', 'lista.csv').
+        ruta_carpeta:   Carpeta destino; si vacía, usa el escritorio del usuario.
+
+    Returns:
+        str: Ruta completa del archivo guardado o mensaje de error.
+    """
+    try:
+        if ruta_carpeta:
+            carpeta = os.path.expanduser(ruta_carpeta)
+        else:
+            carpeta = os.path.join(os.path.expanduser("~"), "Desktop")
+        os.makedirs(carpeta, exist_ok=True)
+        ruta = os.path.join(carpeta, nombre_archivo)
+        with open(ruta, "w", encoding="utf-8") as f:
+            f.write(contenido)
+        return f"Documento guardado en: {ruta}"
+    except Exception as exc:  # noqa: BLE001
+        return f"[Error al guardar el documento: {exc}]"
+
+
 # ---------------------------------------------------------------------------
 # Herramientas del sistema
 # ---------------------------------------------------------------------------
@@ -202,5 +230,6 @@ TOOLS_MAP: dict[str, Callable[..., str]] = {
     "abrir_vscode": abrir_vscode,
     "abrir_aplicacion": abrir_aplicacion,
     "guardar_nota": guardar_nota,
+    "guardar_documento": guardar_documento,
     "obtener_info_sistema": obtener_info_sistema,
 }

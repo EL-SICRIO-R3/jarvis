@@ -13,7 +13,16 @@ import random
 import subprocess
 import threading
 import time
+import os
 import tkinter as tk
+
+try:
+    from tkinterdnd2 import DND_FILES as _DND_FILES, TkinterDnD as _TkDnD
+    _DND_BASE: type = _TkDnD.Tk
+    _HAS_DND = True
+except ImportError:
+    _DND_BASE = tk.Tk  # type: ignore[assignment,misc]
+    _HAS_DND = False
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -65,7 +74,7 @@ class _Particle:
         self.z0 = math.cos(theta)
         self.phase = random.uniform(0.0, 2.0 * math.pi)
 
-class JarvisWindow(tk.Tk):
+class JarvisWindow(_DND_BASE):
     """Ventana principal de Jarvis: red molecular animada + voz."""
 
     def __init__(self, agent: Optional["JarvisAgent"] = None) -> None:
@@ -81,6 +90,16 @@ class JarvisWindow(tk.Tk):
         self._paused       = False  # pausa manual
         self._pause_t0     = 0.0   # instante en que se pausó
         self._ring_factor  = 1.0   # factor de radio del anillo (muelle)
+
+        self._pending_image_path: str | None = None  # ruta imagen arrastrada
+        self._pending_image_tk   = None              # ImageTk para canvas
+        self._image_needs_cmd    = False             # esperando voz para imagen
+        self._img_close_rect     = None              # bounds del × de cierre
+        self._img_drop_rect      = None              # bounds del + de carga
+
+        self._doc_preview_path: str | None = None  # ruta último doc generado
+        self._doc_preview_t0: float        = 0.0   # timestamp absoluto (time.time())
+        self._doc_preview_rect             = None  # bounds para clic-to-open
 
         self._configure_window()
         self._build_ui()
@@ -140,8 +159,13 @@ class JarvisWindow(tk.Tk):
         self._draw_pill()
 
         # Interrumpir habla con clic en canvas principal o Escape
-        self._canvas.bind("<Button-1>", lambda _e: self._interrupt())
+        self._canvas.bind("<Button-1>", self._canvas_click)
         self.bind("<Escape>", lambda _e: self._interrupt())
+
+        # Drag-and-drop de imágenes (toda la ventana)
+        if _HAS_DND:
+            self.drop_target_register(_DND_FILES)
+            self.dnd_bind("<<Drop>>", self._on_image_drop)
 
         self._particles = [_Particle(i, _N_PARTICLES) for i in range(_N_PARTICLES)]
 
@@ -261,6 +285,199 @@ class JarvisWindow(tk.Tk):
             if na > 0.04:
                 c.create_oval(sx - nr, sy - nr, sx + nr, sy + nr,
                               fill=self._blend(col, na), outline="")
+        # ── Preview imagen arrastrada ─────────────────────────────────────────
+        if self._pending_image_tk:
+            iw = self._pending_image_tk.width()
+            ih = self._pending_image_tk.height()
+            pad, margin = 10, 16
+            ix = W - margin - iw
+            iy = margin
+            ox, oy = ix - pad,      iy - pad        # esquina top-left del marco
+            ex, ey = ix + iw + pad, iy + ih + pad   # esquina bottom-right del marco
+
+            pulse = 0.72 + 0.28 * abs(math.sin(t * 1.3))
+
+            # Sombra sólida (aisla el widget del canvas)
+            c.create_rectangle(
+                ox - 6, oy - 6, ex + 6, ey + 6,
+                fill="#000000", outline="",
+            )
+            # Triple glow exterior difuso
+            for gap, alpha in ((6, 0.06), (4, 0.13), (2, 0.22)):
+                c.create_rectangle(
+                    ox - gap, oy - gap, ex + gap, ey + gap,
+                    outline=self._blend(col, alpha * pulse), width=1, fill="",
+                )
+            # Fondo oscuro del marco
+            c.create_rectangle(ox, oy, ex, ey, fill="#080808", outline="")
+            # Borde interior sutil
+            c.create_rectangle(
+                ox, oy, ex, ey,
+                outline=self._blend(col, 0.40 * pulse), width=1, fill="",
+            )
+            # Esquinas HUD (L-shapes en los 4 vértices)
+            clen = 13
+            cc   = self._blend(col, pulse)
+            for sx, sy, dx, dy in (
+                (ox, oy, +1, +1), (ex, oy, -1, +1),
+                (ox, ey, +1, -1), (ex, ey, -1, -1),
+            ):
+                c.create_line(sx, sy, sx + dx * clen, sy,  fill=cc, width=2)
+                c.create_line(sx, sy, sx, sy + dy * clen,  fill=cc, width=2)
+
+            # Imagen
+            c.create_image(ix, iy, image=self._pending_image_tk, anchor="nw")
+
+            # Botón × circular
+            cr  = 10
+            ccx = ex + cr - 1
+            ccy = oy - cr + 1
+            c.create_oval(
+                ccx - cr, ccy - cr, ccx + cr, ccy + cr,
+                fill="#111111", outline=self._blend(col, 0.65 * pulse), width=1,
+            )
+            c.create_text(
+                ccx, ccy, text="×",
+                fill=self._blend(col, 0.95),
+                font=("Helvetica Neue", 12, "bold"),
+            )
+            self._img_close_rect = (ccx - cr, ccy - cr, ccx + cr, ccy + cr)
+            self._img_drop_rect  = None
+
+            # Etiqueta en píldora
+            lx, ly = (ox + ex) // 2, ey + 17
+            lw, lh = 58, 11
+            c.create_rectangle(
+                lx - lw, ly - lh, lx + lw, ly + lh,
+                fill="#0C0C0C", outline=self._blend(col, 0.35 * pulse), width=1,
+            )
+            c.create_text(
+                lx, ly, text="\u25cf  imagen activa",
+                fill=self._blend(col, 0.65),
+                font=("Helvetica Neue", 9),
+            )
+        else:
+            self._img_close_rect = None
+            # Zona de carga refinada (esquina superior derecha)
+            bx1, by1, bx2, by2 = W - 52, 10, W - 10, 52
+            bxc, byc = (bx1 + bx2) // 2, (by1 + by2) // 2
+            pulse = 0.50 + 0.30 * abs(math.sin(t * 1.5))
+
+            c.create_rectangle(bx1, by1, bx2, by2, fill="#070707", outline="")
+            c.create_rectangle(
+                bx1, by1, bx2, by2,
+                outline=self._blend(col, 0.18 * pulse), width=1, fill="",
+            )
+            clen = 8
+            cc   = self._blend(col, 0.55 * pulse)
+            for sx, sy, dx, dy in (
+                (bx1, by1, +1, +1), (bx2, by1, -1, +1),
+                (bx1, by2, +1, -1), (bx2, by2, -1, -1),
+            ):
+                c.create_line(sx, sy, sx + dx * clen, sy, fill=cc, width=1)
+                c.create_line(sx, sy, sx, sy + dy * clen, fill=cc, width=1)
+            c.create_text(
+                bxc, byc, text="+",
+                fill=self._blend(col, 0.45 * pulse),
+                font=("Helvetica Neue", 18),
+            )
+            self._img_drop_rect = (bx1, by1, bx2, by2)
+
+        # ── Preview documento generado ────────────────────────────────────────
+        if self._doc_preview_path:
+            _DOC_SHOW, _DOC_FADE = 12.0, 4.0
+            _age = time.time() - self._doc_preview_t0
+            if _age >= _DOC_SHOW:
+                self._doc_preview_path = None
+                self._doc_preview_rect = None
+            else:
+                # Alpha: pleno durante los primeros segundos, luego fade-out
+                if _age < _DOC_SHOW - _DOC_FADE:
+                    _da = 1.0
+                else:
+                    _da = max(0.0, 1.0 - (_age - (_DOC_SHOW - _DOC_FADE)) / _DOC_FADE)
+                # Desliz de entrada (primeros 0.45 s: baja desde abajo)
+                _slide = int(18 * max(0.0, 1.0 - _age / 0.45))
+
+                _dpath = self._doc_preview_path
+                _fname = os.path.basename(_dpath)
+                _ext   = os.path.splitext(_fname)[1].lower()
+                _EXT_C = {
+                    ".txt": "#32D74B", ".md": "#0A84FF", ".csv": "#FFD60A",
+                    ".json": "#FF9F0A", ".pdf": "#FF453A", ".html": "#5E5CE6",
+                }
+                _tcol = _EXT_C.get(_ext, col)
+                _dc   = lambda hx, a, _d=_da: self._blend(hx, a * _d)  # noqa: E731
+
+                _cw, _ch = 268, 80
+                _cx1, _cy1 = 12, H - _ch - 12 + _slide
+                _cx2, _cy2 = _cx1 + _cw, _cy1 + _ch
+
+                # Sombra sólida exterior
+                c.create_rectangle(_cx1 - 4, _cy1 - 4, _cx2 + 4, _cy2 + 4,
+                                   fill="#000000", outline="")
+                # Triple glow
+                for _g, _ga in ((5, 0.05), (3, 0.11), (1, 0.20)):
+                    c.create_rectangle(_cx1 - _g, _cy1 - _g, _cx2 + _g, _cy2 + _g,
+                                       outline=_dc(col, _ga), width=1, fill="")
+                # Fondo oscuro
+                c.create_rectangle(_cx1, _cy1, _cx2, _cy2,
+                                   fill=self._blend("#090909", max(0.04, _da)), outline="")
+                # Borde
+                c.create_rectangle(_cx1, _cy1, _cx2, _cy2,
+                                   outline=_dc(col, 0.38), width=1, fill="")
+                # Esquinas HUD
+                for _sx, _sy, _ddx, _ddy in (
+                    (_cx1, _cy1, +1, +1), (_cx2, _cy1, -1, +1),
+                    (_cx1, _cy2, +1, -1), (_cx2, _cy2, -1, -1),
+                ):
+                    c.create_line(_sx, _sy, _sx + _ddx * 10, _sy,       fill=_dc(col, 0.90), width=2)
+                    c.create_line(_sx, _sy, _sx,              _sy + _ddy * 10, fill=_dc(col, 0.90), width=2)
+
+                # Badge tipo archivo
+                _bx1, _by1, _bx2, _by2 = _cx1 + 10, _cy1 + 13, _cx1 + 46, _cy1 + 29
+                c.create_rectangle(_bx1, _by1, _bx2, _by2,
+                                   fill=self._blend(_tcol, 0.15 * _da),
+                                   outline=_dc(_tcol, 0.70), width=1)
+                c.create_text((_bx1 + _bx2) // 2, (_by1 + _by2) // 2,
+                              text=(_ext[1:].upper() if _ext else "DOC")[:4],
+                              fill=_dc(_tcol, 0.92),
+                              font=("Helvetica Neue", 8, "bold"))
+
+                # Nombre de archivo
+                _fn_s = _fname if len(_fname) <= 25 else _fname[:22] + "\u2026"
+                c.create_text(_bx2 + 9, _by1 + 7, text=_fn_s, anchor="w",
+                              fill=_dc("#EEEEEE", 0.92),
+                              font=("Helvetica Neue", 11, "bold"))
+
+                # Ruta corta
+                _dir = os.path.dirname(_dpath)
+                _hm  = os.path.expanduser("~")
+                _dir = ("~" + _dir[len(_hm):]) if _dir.startswith(_hm) else _dir
+                _dir_s = _dir if len(_dir) <= 30 else "\u2026" + _dir[-27:]
+                c.create_text(_bx2 + 9, _by1 + 21, text=_dir_s, anchor="w",
+                              fill=_dc("#888888", 0.80),
+                              font=("Helvetica Neue", 8))
+
+                # Barra de tiempo restante
+                _pb_x, _pb_y, _pb_w = _cx1 + 10, _cy2 - 14, _cw - 20
+                _pb_p = max(0.0, 1.0 - _age / _DOC_SHOW)
+                c.create_rectangle(_pb_x, _pb_y, _pb_x + _pb_w, _pb_y + 2,
+                                   fill=self._blend("#1A1A1A", max(0.04, _da)), outline="")
+                if _pb_p > 0:
+                    c.create_rectangle(_pb_x, _pb_y,
+                                       _pb_x + int(_pb_w * _pb_p), _pb_y + 2,
+                                       fill=_dc(col, 0.50), outline="")
+
+                # Hint
+                c.create_text(_cx1 + _cw // 2, _cy2 - 5,
+                              text="\u00b7 clic para abrir \u00b7",
+                              fill=_dc(col, 0.45),
+                              font=("Helvetica Neue", 8))
+                self._doc_preview_rect = (_cx1, _cy1, _cx2, _cy2)
+        else:
+            self._doc_preview_rect = None
+
     @staticmethod
     def _blend(hex_col: str, alpha: float) -> str:
         r = int(hex_col[1:3], 16)
@@ -272,14 +489,88 @@ class JarvisWindow(tk.Tk):
             max(0, min(255, int(b * alpha))),
         )
 
+    # ── Imagen ─────────────────────────────────────────────────────────────────
+    def _canvas_click(self, event) -> None:
+        """Clic en canvas: cierra preview de imagen o interrumpe habla."""
+        if self._img_close_rect:
+            x1, y1, x2, y2 = self._img_close_rect
+            if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                self._clear_image()
+                return
+        if self._img_drop_rect:
+            x1, y1, x2, y2 = self._img_drop_rect
+            if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                self.after(0, self._open_image_dialog)
+                return
+        if self._doc_preview_rect and self._doc_preview_path:
+            x1, y1, x2, y2 = self._doc_preview_rect
+            if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                subprocess.Popen(["open", self._doc_preview_path])
+                return
+        self._interrupt()
+
+    def _on_image_drop(self, event) -> None:
+        """Maneja imagen arrastrada sobre la ventana."""
+        raw = event.data.strip()
+        if raw.startswith("{"):
+            raw = raw[1:].split("}")[0]
+        else:
+            raw = raw.split()[0]
+        self._load_image_preview(raw)
+
+    def _load_image_preview(self, path: str) -> None:
+        """Carga y redimensiona la imagen para mostrar en el canvas."""
+        ext = os.path.splitext(path)[1].lower()
+        if ext not in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff"):
+            self._set_status("Formato no soportado (PNG, JPG, GIF…)")
+            return
+        try:
+            from PIL import Image, ImageTk as _ITk
+            img = Image.open(path)
+            img.thumbnail((130, 130), Image.LANCZOS)
+            self._pending_image_tk   = _ITk.PhotoImage(img)
+            self._pending_image_path = path
+            self._image_needs_cmd    = True
+            self._set_status("Imagen lista · di qué hacer con ella")
+            if self._state not in (_SPEAKING, _THINKING):
+                self._transition(_LISTENING)
+        except ImportError:
+            self._set_status("Instala Pillow: pip install Pillow")
+        except Exception as exc:
+            self._set_status(f"Error al cargar imagen: {exc}")
+
+    def _open_image_dialog(self) -> None:
+        """Abre diálogo de archivo como alternativa al drag-and-drop."""
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(
+            title="Seleccionar imagen",
+            filetypes=[
+                ("Imágenes", "*.png *.jpg *.jpeg *.gif *.bmp *.webp *.tiff"),
+                ("Todos", "*.*"),
+            ],
+        )
+        if path:
+            self._load_image_preview(path)
+
+    def _clear_image(self) -> None:
+        """Descarta la imagen activa y limpia el preview."""
+        self._pending_image_path = None
+        self._pending_image_tk   = None
+        self._image_needs_cmd    = False
+        self._img_close_rect     = None
+    def _show_doc_preview(self, path: str) -> None:
+        """Activa la tarjeta de preview del documento generado."""
+        self._doc_preview_path = path
+        self._doc_preview_t0   = time.time()
+        self._doc_preview_rect = None
     # ── Voz ────────────────────────────────────────────────────────────────────
     def _init_voice(self) -> None:
         def _setup() -> None:
             try:
                 import speech_recognition as sr
                 self._recognizer = sr.Recognizer()
-                self._recognizer.pause_threshold       = 0.8
-                self._recognizer.non_speaking_duration = 0.6
+                self._recognizer.pause_threshold       = 1.5
+                self._recognizer.non_speaking_duration = 1.2
                 self._mic = sr.Microphone()
                 with self._mic as source:
                     self._recognizer.adjust_for_ambient_noise(source, duration=1.0)
@@ -290,33 +581,46 @@ class JarvisWindow(tk.Tk):
         threading.Thread(target=_setup, daemon=True).start()
 
     def _continuous_loop(self) -> None:
-        """Loop de escucha con wake word.
-        Solo llama a la IA tras detectar 'jarvis'.
-        """
+        """Loop de escucha con wake word y modo conversación persistente."""
         import re as _re
         import speech_recognition as sr
 
         _WAKE = _re.compile(
             r"^(?:hey\s+|oye\s+|ok\s+)?jarvis[,\s:!?.]*(.*)$", _re.IGNORECASE
         )
-        waiting_command = False
+        # Frases para terminar la conversación
+        _CONV_END = _re.compile(
+            r"^\s*(?:ap[aá]gate|termina(?:r)?|cierra|para|fin(?:aliza(?:r)?)?|"
+            r"hasta\s+luego|adi[oó]s|chau|bye|no\s+m[aá]s)\s*$",
+            _re.IGNORECASE,
+        )
+        _OPEN_DOC = _re.compile(
+            r"^(?:abre(?:lo|la)?|open|visualiza(?:r)?|muestra(?:me)?)"
+            r"(?:\s+(?:el|la|ese|esa|este|esta))?\s*(?:archivo|documento|nota|fichero)?\s*$",
+            _re.IGNORECASE,
+        )
+        _LABEL_CONV = "Conversación activa · di «apágate» para terminar"
+
+        in_conversation = False  # True = no se necesita wake word entre frases
 
         # Esperar init
         while self._state != _IDLE and self._voice_active:
             time.sleep(0.05)
 
         while self._voice_active:
-            # Pausa: esperar y limpiar activacion pendiente
+            # Pausa: esperar y salir del modo conversación
             if self._paused:
                 while self._paused and self._voice_active:
                     time.sleep(0.05)
-                waiting_command = False
+                in_conversation = False
                 if not self._voice_active:
                     break
 
-            # Mantener LISTENING (nunca volver a IDLE entre ciclos)
+            # Mantener LISTENING
             if self._state not in (_SPEAKING, _THINKING, _PAUSED, _LISTENING):
                 self._transition(_LISTENING)
+                if in_conversation:
+                    self._set_status(_LABEL_CONV)
 
             # Escuchar
             try:
@@ -342,49 +646,94 @@ class JarvisWindow(tk.Tk):
                 text = self._recognizer.recognize_google(audio, language="es-ES")
             except sr.UnknownValueError:
                 self._transition(_LISTENING)
+                if in_conversation:
+                    self._set_status(_LABEL_CONV)
                 continue
             except Exception as exc:
                 self._show_response(f"Error de red: {exc}")
                 self._transition(_LISTENING)
+                if in_conversation:
+                    self._set_status(_LABEL_CONV)
                 continue
 
             text = text.strip()
             if not text:
                 self._transition(_LISTENING)
+                if in_conversation:
+                    self._set_status(_LABEL_CONV)
                 continue
 
-            # Wake word o modo activado
+            # ── Determinar comando ─────────────────────────────────────────
             command: str | None = None
-            if waiting_command:
+
+            if self._image_needs_cmd:
+                # Imagen arrastrada: cualquier frase es el comando
                 command = text
-                waiting_command = False
+                self._image_needs_cmd = False
+
+            elif in_conversation:
+                # Verificar fin de conversación
+                if _CONV_END.match(text):
+                    in_conversation = False
+                    self._show_response("Jarvis: Hasta luego.")
+                    self._transition(_SPEAKING)
+                    self._speak("Hasta luego.")
+                    if self._state == _SPEAKING:
+                        self._transition(_LISTENING)
+                    continue
+                command = text
+
             else:
                 m = _WAKE.match(text)
                 if m:
                     cmd = m.group(1).strip()
+                    in_conversation = True   # activar modo conversación
+                    self._set_status(_LABEL_CONV)
                     if cmd:
                         command = cmd
                     else:
-                        # Solo "jarvis" -> activado, esperar siguiente frase
-                        self._set_status("Dime…")
+                        # Solo "jarvis" → activado, esperar siguiente frase
+                        self._set_status(_LABEL_CONV)
                         self._state = _LISTENING
-                        waiting_command = True
                         continue
-                # Sin wake word -> ignorar silenciosamente
+                # Sin wake word → ignorar silenciosamente
 
             if command is None:
                 self._transition(_LISTENING)
+                if in_conversation:
+                    self._set_status(_LABEL_CONV)
                 continue
-
-            # Enviar a la IA
+            # ── Abrir documento con voz ───────────────────────────────────
+            if self._doc_preview_path and _OPEN_DOC.match(command):
+                _doc_p = self._doc_preview_path
+                subprocess.Popen(["open", _doc_p])
+                _doc_fn = os.path.basename(_doc_p)
+                self._show_response(f"Jarvis: Abriendo {_doc_fn}")
+                self._transition(_SPEAKING)
+                self._speak(f"Aquí tienes: {_doc_fn}")
+                if self._state == _SPEAKING:
+                    self._transition(_LISTENING)
+                if in_conversation:
+                    self._set_status(_LABEL_CONV)
+                continue
+            # ── Enviar a la IA ─────────────────────────────────────────────
             self._show_response(f"Tú: {command}")
+            img_path = self._pending_image_path
             try:
-                reply = (
-                    self._agent.send_message(command)
-                    if self._agent else "[Modo demo]"
-                )
+                if img_path and self._agent:
+                    reply = self._agent.send_message_with_image(command, img_path)
+                elif self._agent:
+                    reply = self._agent.send_message(command)
+                else:
+                    reply = "[Modo demo]"
             except Exception as exc:
                 reply = f"[Error: {exc}]"
+
+            # ── Notificar documento guardado ─────────────────────────────────
+            if self._agent and self._agent.last_saved_path:
+                _saved = self._agent.last_saved_path
+                self._agent.last_saved_path = None
+                self.after(0, lambda p=_saved: self._show_doc_preview(p))
 
             self._show_response(f"Jarvis: {reply}")
             self._transition(_SPEAKING)
@@ -392,6 +741,9 @@ class JarvisWindow(tk.Tk):
 
             if self._state == _SPEAKING:
                 self._transition(_LISTENING)
+            if in_conversation:
+                self._set_status(_LABEL_CONV)
+
     def _interrupt(self) -> None:
         """Interrumpe el habla de Jarvis y vuelve a escuchar de inmediato."""
         if self._state != _SPEAKING:

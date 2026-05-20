@@ -19,3 +19,9 @@ truststore>=0.10.0   # certificados SSL del sistema en macOS/Windows/Linux
 
 # TTS fallback para sistemas no macOS
 pyttsx3>=2.90
+
+# Imágenes – carga, redimensionado y preview en canvas
+Pillow>=10.0.0
+
+# Drag-and-drop nativo de archivos en la ventana tkinter
+tkinterdnd2>=0.3.0
