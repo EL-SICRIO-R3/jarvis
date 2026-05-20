@@ -7,7 +7,7 @@ customtkinter==5.2.2
 pystray==0.19.5
 
 # Imagen para el ícono de pystray
-Pillow==11.2.1
+Pillow==12.2.0
 
 # Atajo de teclado global
 keyboard==0.13.5
