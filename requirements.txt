@@ -1,0 +1,22 @@
+# Jarvis Personal – dependencias (Python 3.10+)
+
+# Interfaz gráfica moderna
+customtkinter==5.2.2
+
+# Ícono en la bandeja del sistema
+pystray==0.19.5
+
+# Imagen para el ícono de pystray
+Pillow==11.2.1
+
+# Atajo de teclado global
+keyboard==0.13.5
+
+# Acceso al portapapeles
+pyperclip==1.9.0
+
+# API de Google Gemini (LLM principal)
+google-generativeai==0.8.5
+
+# API de OpenAI (alternativa)
+openai==1.82.0
