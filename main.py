@@ -23,10 +23,6 @@ import sys
 import threading
 from pathlib import Path
 
-import keyboard
-import pystray
-from PIL import Image, ImageDraw
-
 # ---------------------------------------------------------------------------
 # Importaciones locales
 # ---------------------------------------------------------------------------
@@ -36,41 +32,6 @@ from gui import JarvisWindow
 # ---------------------------------------------------------------------------
 # Constantes
 # ---------------------------------------------------------------------------
-_SO = platform.system().lower()
-
-# Atajo global: Cmd+Espacio en macOS, Ctrl+Espacio en Windows/Linux
-_HOTKEY = "command+space" if _SO == "darwin" else "ctrl+space"
-
-# Tamaño del ícono de bandeja
-_ICON_SIZE = (64, 64)
-
-
-# ---------------------------------------------------------------------------
-# Generación del ícono de bandeja (sin archivo externo)
-# ---------------------------------------------------------------------------
-
-def _crear_icono_imagen() -> Image.Image:
-    """
-    Genera una imagen PIL simple para el ícono de la bandeja del sistema.
-
-    Crea un círculo azul con la letra 'J' en blanco, sin necesidad de
-    ningún archivo de imagen externo.
-
-    Returns:
-        Image.Image: Imagen PIL de 64×64 píxeles.
-    """
-    img = Image.new("RGBA", _ICON_SIZE, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-
-    # Fondo circular azul
-    draw.ellipse([4, 4, 60, 60], fill="#0A84FF")
-
-    # Letra 'J' centrada
-    draw.text((22, 14), "J", fill="white")
-
-    return img
-
-
 # ---------------------------------------------------------------------------
 # Clase principal de la aplicación
 # ---------------------------------------------------------------------------
@@ -85,7 +46,6 @@ class JarvisApp:
 
     def __init__(self) -> None:
         self._window: JarvisWindow | None = None
-        self._tray: pystray.Icon | None = None
         self._agent: JarvisAgent | None = None
 
     # ------------------------------------------------------------------
@@ -114,61 +74,9 @@ class JarvisApp:
         """
         self._window = JarvisWindow(agent=self._agent)
 
-    def _init_tray(self) -> None:
-        """
-        Configura e inicia el ícono de la bandeja del sistema.
-
-        El ícono se ejecuta en un hilo daemon separado para no bloquear
-        el bucle principal de Tkinter.
-        """
-        menu = pystray.Menu(
-            pystray.MenuItem("Mostrar / Ocultar", self._toggle_window, default=True),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Salir", self._quit),
-        )
-
-        self._tray = pystray.Icon(
-            name="Jarvis",
-            icon=_crear_icono_imagen(),
-            title="Jarvis Personal",
-            menu=menu,
-        )
-
-        tray_thread = threading.Thread(target=self._tray.run, daemon=True)
-        tray_thread.start()
-
-    def _register_hotkey(self) -> None:
-        """
-        Registra el atajo de teclado global para mostrar/ocultar la ventana.
-
-        Usa la librería ``keyboard``. En macOS puede requerir permisos de
-        accesibilidad (Preferencias del Sistema → Seguridad y Privacidad).
-        """
-        try:
-            keyboard.add_hotkey(_HOTKEY, self._toggle_window)
-            print(f"[Jarvis] Atajo global registrado: {_HOTKEY}")
-        except Exception as exc:  # noqa: BLE001
-            print(f"[Jarvis] No se pudo registrar el atajo '{_HOTKEY}': {exc}")
-
-    # ------------------------------------------------------------------
-    # Callbacks
-    # ------------------------------------------------------------------
-
-    def _toggle_window(self) -> None:
-        """
-        Llama al método ``toggle()`` de la ventana de forma segura
-        desde cualquier hilo.
-        """
-        if self._window is not None:
-            # after(0) garantiza que se ejecute en el hilo de Tkinter
-            self._window.after(0, self._window.toggle)
-
     def _quit(self) -> None:
         """Cierra la aplicación completamente."""
         print("[Jarvis] Cerrando aplicación…")
-        keyboard.unhook_all()
-        if self._tray is not None:
-            self._tray.stop()
         if self._window is not None:
             self._window.quit()
 
@@ -195,12 +103,9 @@ class JarvisApp:
 
         # La ventana DEBE crearse en el hilo principal de Tkinter
         self._init_window()
+        self._window.show()  # Mostrar directamente al arrancar con foco
 
-        # Bandeja e ícono global (hilos secundarios)
-        self._init_tray()
-        self._register_hotkey()
-
-        print("[Jarvis] Listo. Usa el atajo de teclado o el ícono de la bandeja.")
+        print("[Jarvis] Listo.")
 
         # Bucle de eventos (bloquea hasta que se llame a quit())
         try:

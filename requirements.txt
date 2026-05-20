@@ -1,22 +1,21 @@
 # Jarvis Personal – dependencias (Python 3.10+)
 
-# Interfaz gráfica moderna
-customtkinter==5.2.2
-
-# Ícono en la bandeja del sistema
-pystray==0.19.5
-
-# Imagen para el ícono de pystray
-Pillow==12.2.0
-
-# Atajo de teclado global
-keyboard==0.13.5
-
 # Acceso al portapapeles
 pyperclip==1.9.0
 
 # API de Google Gemini (LLM principal)
 google-generativeai==0.8.5
 
-# API de OpenAI (alternativa)
-openai==1.82.0
+# Carga de variables de entorno desde .env
+python-dotenv>=1.0.0
+
+# Reconocimiento de voz – STT  (requiere: brew install portaudio)
+SpeechRecognition>=3.10.0
+pyaudio>=0.2.14
+
+# Síntesis de voz – TTS neural (Microsoft Edge voices, requiere internet)
+edge-tts>=7.0.0
+truststore>=0.10.0   # certificados SSL del sistema en macOS/Windows/Linux
+
+# TTS fallback para sistemas no macOS
+pyttsx3>=2.90
