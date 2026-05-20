@@ -14,6 +14,7 @@ Todas las funciones deben:
 import os
 import platform
 import subprocess
+from typing import Callable
 
 import pyperclip
 
@@ -85,14 +86,8 @@ def abrir_vscode(ruta: str = "") -> str:
     Returns:
         str: Confirmación de la operación o mensaje de error.
     """
-    so = _sistema_operativo()
     try:
-        if so == "windows":
-            cmd = ["code"]
-        elif so == "macos":
-            cmd = ["code"]
-        else:
-            cmd = ["code"]
+        cmd = ["code"]
 
         if ruta:
             ruta_expandida = os.path.expanduser(ruta)
@@ -201,7 +196,7 @@ def obtener_info_sistema() -> str:
 # Registro de herramientas disponibles para el agente
 # ---------------------------------------------------------------------------
 
-TOOLS_MAP: dict[str, callable] = {
+TOOLS_MAP: dict[str, Callable[..., str]] = {
     "obtener_portapapeles": obtener_portapapeles,
     "copiar_al_portapapeles": copiar_al_portapapeles,
     "abrir_vscode": abrir_vscode,

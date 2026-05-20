@@ -63,6 +63,8 @@ class JarvisWindow(ctk.CTk):
         self._agent = agent
         self._is_visible = False
         self._so = platform.system().lower()
+        self._drag_x = 0
+        self._drag_y = 0
 
         self._configure_window()
         self._build_ui()
