@@ -75,6 +75,35 @@ GEMINI_FUNCTION_DECLARATIONS = [
         },
     },
     {
+        "name": "abrir_navegador",
+        "description": (
+            "Abre el navegador predeterminado en una URL o dominio, o realiza una búsqueda en Google. "
+            "Usa esta herramienta cuando el usuario pida: abrir una página web, navegar a un sitio, "
+            "buscar algo en internet, abrir una pestaña nueva con X, ver algo en YouTube, "
+            "visitar un sitio, buscar en Google, etc."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": (
+                        "URL o dominio a abrir (p.ej. 'youtube.com', 'https://github.com', "
+                        "'twitter.com'). Omitir si se usa el parámetro buscar."
+                    ),
+                },
+                "buscar": {
+                    "type": "string",
+                    "description": (
+                        "Término, pregunta o frase para buscar en Google. "
+                        "Usar cuando el usuario no da una URL específica."
+                    ),
+                },
+            },
+            "required": [],
+        },
+    },
+    {
         "name": "guardar_nota",
         "description": "Guarda texto en un archivo de notas en el escritorio del usuario.",
         "parameters": {
@@ -147,18 +176,28 @@ Personalidad:
 Capacidades:
 - Leer y escribir en el portapapeles del sistema.
 - Abrir aplicaciones y proyectos en VS Code.
+- Abrir el navegador en cualquier URL y realizar búsquedas en Google.
 - Guardar notas rápidas en el escritorio.
 - Generar y guardar documentos (informes, reportes, resúmenes, cartas, listas) en el escritorio.
 - Obtener información del sistema operativo.
+
+=== REGLA OBLIGATORIA: GENERACIÓN DE DOCUMENTOS ===
+Si el usuario pide crear, generar, escribir, elaborar, redactar o preparar cualquier tipo
+de documento, informe, reporte, resumen, carta, lista, análisis, plan o texto estructurado:
+  1. DEBES llamar a la herramienta `guardar_documento` con el contenido COMPLETO.
+  2. NUNCA incluyas el contenido del documento en tu respuesta de texto.
+  3. Tras guardar, responde solo con una confirmación breve del nombre del archivo.
+
+Ejemplo CORRECTO:    → llamas a guardar_documento({contenido: "...", nombre_archivo: "informe.txt"})
+                     → respondes: "Guardado como informe.txt en el escritorio."
+Ejemplo INCORRECTO:  → responder el texto del documento sin llamar a guardar_documento.
+=====================================================
 
 Reglas operativas:
 1. Responde en el idioma del usuario (normalmente español).
 2. Respuestas cortas por defecto; desarrolla solo cuando la complejidad lo exige.
 3. Usa la herramienta apropiada cuando el usuario pide ejecutar algo en la computadora.
 4. Si no sabes algo, dilo claramente. Nunca inventes información.
-5. Cuando el usuario pida crear o generar un documento (informe, reporte, resumen, carta,
-   lista u otro texto estructurado), usa siempre `guardar_documento` con el contenido
-   completo y un nombre de archivo descriptivo (p.ej. 'resumen_reunion.txt').
 """
 
 

@@ -55,24 +55,25 @@ _STATE_LABEL = {
 # ── Dimensiones ─────────────────────────────────────────────────────────────
 _W, _H        = 860, 620
 _BOTTOM_H     = 120
-_N_PARTICLES  = 30    # puntos distribuidos en la esfera (Fibonacci)
+_N_PARTICLES  = 72    # puntos distribuidos en la esfera (Fibonacci)
 _SPHERE_R     = 0.26  # radio como fraccion de min(W,H)
-_CONNECT_D3   = 0.80  # umbral de conexion en distancia de cuerda 3D
+_CONNECT_D3   = 0.68  # umbral de conexion en distancia de cuerda 3D
 _FPS          = 30
 
 
 class _Particle:
     """Punto en la superficie de una esfera unitaria — distribucion Fibonacci."""
-    __slots__ = ("x0", "y0", "z0", "phase")
+    __slots__ = ("x0", "y0", "z0", "phase", "disp_cur")
 
     def __init__(self, index: int, total: int) -> None:
-        golden  = (1.0 + math.sqrt(5.0)) / 2.0
-        theta   = math.acos(1.0 - 2.0 * (index + 0.5) / total)
-        phi     = 2.0 * math.pi * index / golden
-        self.x0 = math.sin(theta) * math.cos(phi)
-        self.y0 = math.sin(theta) * math.sin(phi)
-        self.z0 = math.cos(theta)
+        golden     = (1.0 + math.sqrt(5.0)) / 2.0
+        theta      = math.acos(1.0 - 2.0 * (index + 0.5) / total)
+        phi        = 2.0 * math.pi * index / golden
+        self.x0    = math.sin(theta) * math.cos(phi)
+        self.y0    = math.sin(theta) * math.sin(phi)
+        self.z0    = math.cos(theta)
         self.phase = random.uniform(0.0, 2.0 * math.pi)
+        self.disp_cur: float = 1.0   # desplazamiento radial suavizado (lerp)
 
 class JarvisWindow(_DND_BASE):
     """Ventana principal de Jarvis: red molecular animada + voz."""
@@ -100,6 +101,7 @@ class JarvisWindow(_DND_BASE):
         self._doc_preview_path: str | None = None  # ruta último doc generado
         self._doc_preview_t0: float        = 0.0   # timestamp absoluto (time.time())
         self._doc_preview_rect             = None  # bounds para clic-to-open
+
 
         self._configure_window()
         self._build_ui()
@@ -206,19 +208,22 @@ class JarvisWindow(_DND_BASE):
         # Proyectar particulas al plano 2D con perspectiva
         projected: list[tuple[float, float, float, object]] = []
         for p in self._particles:
-            # Vibracion radial segun estado
+            # Vibracion radial objetivo segun estado
             if self._state == _LISTENING:
-                disp = 1.0 + 0.16 * math.sin(t * 14 + p.phase)
+                disp_target = 1.0 + 0.16 * math.sin(t * 14 + p.phase)
             elif self._state == _SPEAKING:
-                disp = 1.0 + 0.20 * math.sin(t * 9 + p.x0 * 1.6 + p.y0 * 1.6)
+                disp_target = 1.0 + 0.20 * math.sin(t * 9 + p.x0 * 1.6 + p.y0 * 1.6)
             elif self._state == _THINKING:
-                disp = 1.0 + 0.06 * math.sin(t * 4 + p.phase)
+                disp_target = 1.0 + 0.06 * math.sin(t * 4 + p.phase)
             elif self._state == _PAUSED:
-                disp = 1.0 + 0.015 * math.sin(t * 0.7 + p.phase)
+                disp_target = 1.0 + 0.015 * math.sin(t * 0.7 + p.phase)
             else:
-                disp = 1.0 + 0.04 * math.sin(t * 1.8 + p.phase)
+                disp_target = 1.0 + 0.04 * math.sin(t * 1.8 + p.phase)
 
-            px, py, pz = p.x0 * disp, p.y0 * disp, p.z0 * disp
+            # Lerp: suaviza cambios de amplitud entre estados (coef 0.07 ≈ 140ms)
+            p.disp_cur += (disp_target - p.disp_cur) * 0.07
+
+            px, py, pz = p.x0 * p.disp_cur, p.y0 * p.disp_cur, p.z0 * p.disp_cur
 
             # Rotacion Y
             x1 =  px * cos_ry + pz * sin_ry
@@ -509,6 +514,7 @@ class JarvisWindow(_DND_BASE):
                 return
         self._interrupt()
 
+
     def _on_image_drop(self, event) -> None:
         """Maneja imagen arrastrada sobre la ventana."""
         raw = event.data.strip()
@@ -597,6 +603,12 @@ class JarvisWindow(_DND_BASE):
         _OPEN_DOC = _re.compile(
             r"^(?:abre(?:lo|la)?|open|visualiza(?:r)?|muestra(?:me)?)"
             r"(?:\s+(?:el|la|ese|esa|este|esta))?\s*(?:archivo|documento|nota|fichero)?\s*$",
+            _re.IGNORECASE,
+        )
+        # Detectar solicitudes de generación de documento para inyección de instrucción
+        _DOC_CMD = _re.compile(
+            r"\b(?:informe|reporte|resumen|carta|documento|an[aá]lisis|propuesta|plan|memo|"
+            r"memorando|listado|elabora|redacta|genera(?:r)?|crear?)\b",
             _re.IGNORECASE,
         )
         _LABEL_CONV = "Conversación activa · di «apágate» para terminar"
@@ -719,11 +731,19 @@ class JarvisWindow(_DND_BASE):
             # ── Enviar a la IA ─────────────────────────────────────────────
             self._show_response(f"Tú: {command}")
             img_path = self._pending_image_path
+            # Inyectar recordatorio de herramienta si se detecta solicitud de documento
+            _ai_cmd = command
+            if not img_path and _DOC_CMD.search(command):
+                _ai_cmd = (
+                    "[OBLIGATORIO: usa la herramienta guardar_documento para guardar el "
+                    "contenido en un archivo. NO incluyas el documento en el texto de "
+                    "respuesta. Solo confirma el nombre del archivo guardado.]\n" + command
+                )
             try:
                 if img_path and self._agent:
-                    reply = self._agent.send_message_with_image(command, img_path)
+                    reply = self._agent.send_message_with_image(_ai_cmd, img_path)
                 elif self._agent:
-                    reply = self._agent.send_message(command)
+                    reply = self._agent.send_message(_ai_cmd)
                 else:
                     reply = "[Modo demo]"
             except Exception as exc:

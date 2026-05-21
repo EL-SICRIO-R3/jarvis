@@ -141,6 +141,41 @@ def abrir_aplicacion(nombre: str) -> str:
         return f"[Error al abrir '{nombre}': {exc}]"
 
 
+def abrir_navegador(url: str = "", buscar: str = "") -> str:
+    """
+    Abre el navegador predeterminado en una URL, dominio o realiza una búsqueda en Google.
+
+    Args:
+        url:    URL o dominio a abrir (p.ej. 'google.com', 'https://github.com').
+                Si no tiene esquema, se añade 'https://' automáticamente.
+        buscar: Término o frase para buscar en Google (cuando no se da una URL).
+
+    Returns:
+        str: Confirmación de la operación o mensaje de error.
+    """
+    import urllib.parse
+    import webbrowser
+
+    # Seguridad: bloquear esquemas no web
+    _check = (url or "").lower().lstrip()
+    if any(_check.startswith(s) for s in ("file://", "data:", "javascript:", "vbscript:")):
+        return "[Error: esquema de URL no permitido.]"
+
+    if url:
+        url = url.strip()
+        if not url.startswith(("http://", "https://")):
+            url = "https://" + url
+        webbrowser.open_new_tab(url)
+        return f"Abriendo {url} en el navegador."
+    elif buscar:
+        query = urllib.parse.quote_plus(buscar.strip())
+        webbrowser.open_new_tab(f"https://www.google.com/search?q={query}")
+        return f"Buscando '{buscar}' en Google."
+    else:
+        webbrowser.open_new_tab("https://www.google.com")
+        return "Abriendo Google en el navegador."
+
+
 # ---------------------------------------------------------------------------
 # Herramientas de notas
 # ---------------------------------------------------------------------------
@@ -229,6 +264,7 @@ TOOLS_MAP: dict[str, Callable[..., str]] = {
     "copiar_al_portapapeles": copiar_al_portapapeles,
     "abrir_vscode": abrir_vscode,
     "abrir_aplicacion": abrir_aplicacion,
+    "abrir_navegador": abrir_navegador,
     "guardar_nota": guardar_nota,
     "guardar_documento": guardar_documento,
     "obtener_info_sistema": obtener_info_sistema,
