@@ -1,7 +1,15 @@
 # Jarvis Personal – dependencias (Python 3.10+)
 
-# Acceso al portapapeles
+# Librería de herramientas para el agente de IA
+ai-tools-hub @ git+https://github.com/EL-SICRIO-R3/ia-tools.git
+
+# Dependencias de ai-tools-hub
 pyperclip==1.9.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+pypdf>=4.0.0
+psutil>=5.9.0
+opencv-python>=4.9.0
 
 # API de Google Gemini (LLM principal)
 google-generativeai==0.8.5

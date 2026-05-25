@@ -18,149 +18,325 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from tools import TOOLS_MAP
+from ai_tools_hub import ALL_TOOLS
+from tools import TOOLS_MAP, JARVIS_CUSTOM_CALLABLES
 from dotenv import load_dotenv
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Definición de herramientas para Gemini (Function Declarations)
+# Lista combinada de herramientas para Gemini (callables con type hints y
+# docstrings — Gemini genera el esquema automáticamente).
 # ---------------------------------------------------------------------------
 
-GEMINI_FUNCTION_DECLARATIONS = [
-    {
-        "name": "obtener_portapapeles",
-        "description": "Lee y retorna el texto actual del portapapeles del sistema.",
-        "parameters": {"type": "object", "properties": {}, "required": []},
-    },
-    {
-        "name": "copiar_al_portapapeles",
-        "description": "Copia un texto al portapapeles del sistema.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "texto": {
-                    "type": "string",
-                    "description": "Texto que se copiará al portapapeles.",
-                }
-            },
-            "required": ["texto"],
-        },
-    },
-    {
-        "name": "abrir_vscode",
-        "description": "Abre Visual Studio Code, opcionalmente en una ruta específica.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "ruta": {
-                    "type": "string",
-                    "description": "Ruta del directorio o archivo a abrir en VSCode.",
-                }
-            },
-            "required": [],
-        },
-    },
-    {
-        "name": "abrir_aplicacion",
-        "description": "Abre una aplicación del sistema por nombre (p. ej. 'Safari', 'Notepad').",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "nombre": {
-                    "type": "string",
-                    "description": "Nombre de la aplicación a abrir.",
-                }
-            },
-            "required": ["nombre"],
-        },
-    },
-    {
-        "name": "abrir_navegador",
-        "description": (
-            "Abre el navegador predeterminado en una URL o dominio, o realiza una búsqueda en Google. "
-            "Usa esta herramienta cuando el usuario pida: abrir una página web, navegar a un sitio, "
-            "buscar algo en internet, abrir una pestaña nueva con X, ver algo en YouTube, "
-            "visitar un sitio, buscar en Google, etc."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "description": (
-                        "URL o dominio a abrir (p.ej. 'youtube.com', 'https://github.com', "
-                        "'twitter.com'). Omitir si se usa el parámetro buscar."
-                    ),
-                },
-                "buscar": {
-                    "type": "string",
-                    "description": (
-                        "Término, pregunta o frase para buscar en Google. "
-                        "Usar cuando el usuario no da una URL específica."
-                    ),
-                },
-            },
-            "required": [],
-        },
-    },
-    {
-        "name": "guardar_nota",
-        "description": "Guarda texto en un archivo de notas en el escritorio del usuario.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "texto": {
-                    "type": "string",
-                    "description": "Contenido de la nota.",
-                },
-                "nombre_archivo": {
-                    "type": "string",
-                    "description": "Nombre del archivo de destino (opcional).",
-                },
-            },
-            "required": ["texto"],
-        },
-    },
-    {
-        "name": "guardar_documento",
-        "description": "Genera y guarda un documento de texto (informe, reporte, resumen, carta, lista, etc.) en el escritorio del usuario. Úsala siempre que el usuario pida 'genera un documento', 'crea un informe', 'escribe un reporte', 'guarda un resumen', 'hazme una carta', etc.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "contenido": {
-                    "type": "string",
-                    "description": "Contenido completo del documento.",
-                },
-                "nombre_archivo": {
-                    "type": "string",
-                    "description": "Nombre del archivo con extensión (p.ej. 'reporte.txt', 'resumen.md', 'lista.csv'). Por defecto 'documento.txt'.",
-                },
-                "ruta_carpeta": {
-                    "type": "string",
-                    "description": "Carpeta de destino. Si se omite, se guarda en el escritorio.",
-                },
-            },
-            "required": ["contenido"],
-        },
-    },
-    {
-        "name": "obtener_info_sistema",
-        "description": "Retorna información básica del sistema operativo (SO, versión, arquitectura).",
-        "parameters": {"type": "object", "properties": {}, "required": []},
-    },
-]
+GEMINI_TOOLS = JARVIS_CUSTOM_CALLABLES + ALL_TOOLS
 
-# Definición equivalente para OpenAI (tools schema)
+# ---------------------------------------------------------------------------
+# Esquema de herramientas para OpenAI (Function Calling manual)
+# ---------------------------------------------------------------------------
+
 OPENAI_TOOLS = [
+    # ── Jarvis-específicas ────────────────────────────────────────────────
     {
         "type": "function",
         "function": {
-            "name": decl["name"],
-            "description": decl["description"],
-            "parameters": decl["parameters"],
+            "name": "copiar_al_portapapeles",
+            "description": "Copia un texto al portapapeles del sistema.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "texto": {"type": "string", "description": "Texto que se copiará al portapapeles."}
+                },
+                "required": ["texto"],
+            },
         },
-    }
-    for decl in GEMINI_FUNCTION_DECLARATIONS
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "abrir_vscode",
+            "description": "Abre Visual Studio Code, opcionalmente en una ruta específica.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ruta": {"type": "string", "description": "Ruta del directorio o archivo a abrir en VSCode."}
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "abrir_aplicacion",
+            "description": "Abre una aplicación del sistema por nombre (p. ej. 'Safari', 'Notepad').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "nombre": {"type": "string", "description": "Nombre de la aplicación a abrir."}
+                },
+                "required": ["nombre"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "abrir_navegador",
+            "description": (
+                "Abre el navegador predeterminado en una URL o dominio, o realiza una búsqueda en Google. "
+                "Usa esta herramienta cuando el usuario pida: abrir una página web, navegar a un sitio, "
+                "buscar algo en internet, abrir una pestaña nueva con X, ver algo en YouTube, "
+                "visitar un sitio, buscar en Google, etc."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "URL o dominio a abrir. Omitir si se usa el parámetro buscar.",
+                    },
+                    "buscar": {
+                        "type": "string",
+                        "description": "Término o frase para buscar en Google.",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "guardar_nota",
+            "description": "Guarda texto en un archivo de notas en el escritorio del usuario.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "texto": {"type": "string", "description": "Contenido de la nota."},
+                    "nombre_archivo": {"type": "string", "description": "Nombre del archivo de destino (opcional)."},
+                },
+                "required": ["texto"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "guardar_documento",
+            "description": "Genera y guarda un documento de texto (informe, reporte, resumen, carta, lista, etc.) en el escritorio del usuario. Úsala siempre que el usuario pida 'genera un documento', 'crea un informe', 'escribe un reporte', 'guarda un resumen', 'hazme una carta', etc.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "contenido": {"type": "string", "description": "Contenido completo del documento."},
+                    "nombre_archivo": {"type": "string", "description": "Nombre del archivo con extensión."},
+                    "ruta_carpeta": {"type": "string", "description": "Carpeta de destino. Si se omite, se guarda en el escritorio."},
+                },
+                "required": ["contenido"],
+            },
+        },
+    },
+    # ── ai-tools-hub / system ─────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "get_clipboard_content",
+            "description": "Lee y retorna el texto actual del portapapeles del sistema.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_os_info",
+            "description": "Devuelve un resumen detallado del sistema operativo y el hardware del host.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_terminal_command",
+            "description": "Ejecuta un comando de terminal de una lista de permitidos (solo lectura/informativos) y devuelve su salida.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command_name": {"type": "string", "description": "Clave del comando a ejecutar (e.g. 'ls', 'df', 'pip', 'ps')."},
+                    "argument": {"type": "string", "description": "Argumento de ruta opcional (solo para 'ls' y 'dir')."},
+                },
+                "required": ["command_name"],
+            },
+        },
+    },
+    # ── ai-tools-hub / web ────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "open_browser",
+            "description": "Abre una URL en el navegador predeterminado del sistema.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "La URL a abrir. Si no tiene esquema, se añade https:// automáticamente."}
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "extract_text_from_url",
+            "description": "Descarga una página web y devuelve su texto plano limpio (scripts y estilos eliminados).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "URL de la página a extraer."},
+                    "max_chars": {"type": "integer", "description": "Límite de caracteres del texto devuelto (por defecto 8000)."},
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    # ── ai-tools-hub / file ───────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Lee y devuelve el contenido completo de un archivo de texto o PDF.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Ruta al archivo. Acepta ~ (tilde expansion)."},
+                    "encoding": {"type": "string", "description": "Codificación (por defecto utf-8)."},
+                },
+                "required": ["file_path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_file",
+            "description": "Crea un archivo de texto UTF-8 en la ruta especificada.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Ruta del archivo a crear. Acepta ~."},
+                    "content": {"type": "string", "description": "Contenido a escribir en el archivo."},
+                    "overwrite": {"type": "boolean", "description": "Si True, reemplaza el archivo si ya existe."},
+                },
+                "required": ["file_path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_directory",
+            "description": "Lista los archivos y subdirectorios de una ruta con sus tamaños.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "directory_path": {"type": "string", "description": "Ruta del directorio a listar (por defecto el directorio actual)."},
+                    "show_hidden": {"type": "boolean", "description": "Si True, incluye archivos y carpetas ocultos."},
+                },
+                "required": [],
+            },
+        },
+    },
+    # ── ai-tools-hub / vision ─────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "capturar_foto_webcam",
+            "description": "Captura una foto con la webcam principal del sistema y la guarda como JPEG. Retorna la ruta del archivo.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    # ── ai-tools-hub / dev ────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "liberar_puerto",
+            "description": "Termina el proceso que está escuchando en el puerto TCP especificado.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "puerto": {"type": "integer", "description": "Número de puerto TCP (e.g. 8080, 4200, 3000)."}
+                },
+                "required": ["puerto"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "obtener_arbol_directorios",
+            "description": "Genera un árbol visual de directorios hasta el nivel de profundidad indicado.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ruta": {"type": "string", "description": "Ruta raíz del árbol. Acepta ~."},
+                    "profundidad": {"type": "integer", "description": "Máximo de niveles a mostrar (por defecto 2)."},
+                },
+                "required": ["ruta"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "listar_contenedores_activos",
+            "description": "Lista todos los contenedores Docker que están en ejecución.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reiniciar_contenedor",
+            "description": "Reinicia un contenedor Docker identificado por su nombre o ID.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "nombre_o_id": {"type": "string", "description": "Nombre o ID del contenedor Docker."}
+                },
+                "required": ["nombre_o_id"],
+            },
+        },
+    },
+    # ── ai-tools-hub / interaction ────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "mostrar_notificacion",
+            "description": "Muestra una notificación nativa del sistema operativo.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "titulo": {"type": "string", "description": "Título de la notificación."},
+                    "mensaje": {"type": "string", "description": "Cuerpo / texto de la notificación."},
+                },
+                "required": ["titulo", "mensaje"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "redactar_email",
+            "description": "Abre el cliente de correo electrónico predeterminado con un borrador prellenado.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "destinatario": {"type": "string", "description": "Dirección de correo del destinatario."},
+                    "asunto": {"type": "string", "description": "Asunto del correo."},
+                    "cuerpo": {"type": "string", "description": "Cuerpo del mensaje."},
+                },
+                "required": ["destinatario", "asunto", "cuerpo"],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = """Eres Jarvis, asistente personal de IA con carácter propio.
@@ -177,9 +353,19 @@ Capacidades:
 - Leer y escribir en el portapapeles del sistema.
 - Abrir aplicaciones y proyectos en VS Code.
 - Abrir el navegador en cualquier URL y realizar búsquedas en Google.
+- Extraer el texto de cualquier página web.
 - Guardar notas rápidas en el escritorio.
 - Generar y guardar documentos (informes, reportes, resúmenes, cartas, listas) en el escritorio.
-- Obtener información del sistema operativo.
+- Leer archivos de texto y PDFs.
+- Crear archivos y listar directorios.
+- Obtener información del sistema operativo (básica y detallada).
+- Ejecutar comandos de terminal de solo lectura (ls, df, ps, pip, etc.).
+- Capturar fotos con la webcam.
+- Liberar puertos TCP ocupados.
+- Mostrar el árbol de directorios de un proyecto.
+- Gestionar contenedores Docker (listar y reiniciar).
+- Mostrar notificaciones nativas del sistema operativo.
+- Redactar y abrir borradores de correo en el cliente de email predeterminado.
 
 === REGLA OBLIGATORIA: GENERACIÓN DE DOCUMENTOS ===
 Si el usuario pide crear, generar, escribir, elaborar, redactar o preparar cualquier tipo
@@ -261,11 +447,10 @@ class JarvisAgent:
         import google.generativeai as genai  # type: ignore
 
         genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-        tools = [{"function_declarations": GEMINI_FUNCTION_DECLARATIONS}]
         self._client = genai.GenerativeModel(
             model_name="gemini-2.5-flash-lite",
             system_instruction=SYSTEM_PROMPT,
-            tools=tools,
+            tools=GEMINI_TOOLS,
         )
         self._chat = self._client.start_chat(history=[])
 
