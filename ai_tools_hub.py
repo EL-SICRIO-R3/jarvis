@@ -337,7 +337,7 @@ def tomar_captura_pantalla() -> str:
 
     try:
         import time as _time
-        ts = int(_time.time())
+        ts = int(_time.time() * 1_000_000)  # microseconds — avoids same-second collisions
         output_path = os.path.join(tempfile.gettempdir(), f"screenshot_{ts}.png")
         with mss.mss() as sct:
             monitor = sct.monitors[1]  # monitor principal

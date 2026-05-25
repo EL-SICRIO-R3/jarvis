@@ -669,7 +669,7 @@ class JarvisAgent:
                     for marker in ("en: ", "en:", ": "):
                         if marker in resultado:
                             candidate = resultado.rsplit(marker, 1)[-1].strip()
-                            if os.path.isfile(candidate):
+                            if os.path.isabs(candidate) and os.path.isfile(candidate):
                                 self.last_saved_path = candidate
                                 break
             return resultado
