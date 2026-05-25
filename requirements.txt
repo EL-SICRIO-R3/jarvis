@@ -1,0 +1,27 @@
+# Jarvis Personal – dependencias (Python 3.10+)
+
+# Acceso al portapapeles
+pyperclip==1.9.0
+
+# API de Google Gemini (LLM principal)
+google-generativeai==0.8.5
+
+# Carga de variables de entorno desde .env
+python-dotenv>=1.0.0
+
+# Reconocimiento de voz – STT  (requiere: brew install portaudio)
+SpeechRecognition>=3.10.0
+pyaudio>=0.2.14
+
+# Síntesis de voz – TTS neural (Microsoft Edge voices, requiere internet)
+edge-tts>=7.0.0
+truststore>=0.10.0   # certificados SSL del sistema en macOS/Windows/Linux
+
+# TTS fallback para sistemas no macOS
+pyttsx3>=2.90
+
+# Imágenes – carga, redimensionado y preview en canvas
+Pillow>=10.0.0
+
+# Drag-and-drop nativo de archivos en la ventana tkinter
+tkinterdnd2>=0.3.0
