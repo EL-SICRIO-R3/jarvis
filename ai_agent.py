@@ -658,7 +658,18 @@ class JarvisAgent:
         if func is None:
             return f"[Herramienta '{nombre}' no encontrada.]"
         try:
-            return str(func(**args))
+            resultado = str(func(**args))
+            # Rastrear ruta cuando se guarda un archivo (para el preview de gui.py)
+            if nombre in ("guardar_documento", "guardar_nota", "create_file"):
+                if resultado and not resultado.startswith("["):
+                    # El resultado contiene la ruta absoluta tras ":" o "en:"
+                    for marker in ("en: ", "en:", ": "):
+                        if marker in resultado:
+                            candidate = resultado.split(marker, 1)[-1].strip()
+                            if os.path.isfile(candidate):
+                                self.last_saved_path = candidate
+                                break
+            return resultado
         except TypeError as exc:
             return f"[Error de argumentos en '{nombre}': {exc}]"
         except Exception as exc:  # noqa: BLE001
