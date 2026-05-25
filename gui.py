@@ -577,6 +577,9 @@ class JarvisWindow(_DND_BASE):
                 self._capture_preview_rect = (_cx1, _cy1, _cx2, _cy2)
         else:
             self._capture_preview_rect = None
+
+    @staticmethod
+    def _blend(hex_col: str, alpha: float) -> str:
         r = int(hex_col[1:3], 16)
         g = int(hex_col[3:5], 16)
         b = int(hex_col[5:7], 16)

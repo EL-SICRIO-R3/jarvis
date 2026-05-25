@@ -338,6 +338,9 @@ class JarvisAgent:
     # Herramientas que devuelven una ruta de imagen capturada
     _VISION_CAPTURE_TOOLS = frozenset({"capturar_foto_webcam", "tomar_captura_pantalla"})
 
+    # Herramientas que guardan archivos (resultado incluye la ruta absoluta)
+    _SAVE_TOOLS = frozenset({"guardar_documento", "guardar_nota", "create_file"})
+
     def __init__(self, provider: Optional[str] = None) -> None:
         self._provider = self._resolve_provider(provider)
         self._history: list[dict] = []
@@ -660,12 +663,12 @@ class JarvisAgent:
         try:
             resultado = str(func(**args))
             # Rastrear ruta cuando se guarda un archivo (para el preview de gui.py)
-            if nombre in ("guardar_documento", "guardar_nota", "create_file"):
+            if nombre in self._SAVE_TOOLS:
                 if resultado and not resultado.startswith("["):
-                    # El resultado contiene la ruta absoluta tras ":" o "en:"
+                    # El resultado contiene la ruta absoluta al final, tras "en: " o ": "
                     for marker in ("en: ", "en:", ": "):
                         if marker in resultado:
-                            candidate = resultado.split(marker, 1)[-1].strip()
+                            candidate = resultado.rsplit(marker, 1)[-1].strip()
                             if os.path.isfile(candidate):
                                 self.last_saved_path = candidate
                                 break

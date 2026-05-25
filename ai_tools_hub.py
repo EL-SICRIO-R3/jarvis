@@ -336,7 +336,9 @@ def tomar_captura_pantalla() -> str:
         return "[Error: 'mss' no está instalado. Instala con: pip install mss]"
 
     try:
-        output_path = os.path.join(tempfile.gettempdir(), "screenshot.png")
+        import time as _time
+        ts = int(_time.time())
+        output_path = os.path.join(tempfile.gettempdir(), f"screenshot_{ts}.png")
         with mss.mss() as sct:
             monitor = sct.monitors[1]  # monitor principal
             screenshot = sct.grab(monitor)
