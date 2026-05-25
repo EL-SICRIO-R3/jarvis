@@ -1,9 +1,6 @@
 # Jarvis Personal – dependencias (Python 3.10+)
 
-# Librería de herramientas para el agente de IA
-ai-tools-hub @ git+https://github.com/EL-SICRIO-R3/ia-tools.git
-
-# Dependencias de ai-tools-hub
+# Dependencias de herramientas del agente
 pyperclip==1.9.0
 requests>=2.31.0
 beautifulsoup4>=4.12.0

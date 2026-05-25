@@ -18,7 +18,6 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from ai_tools_hub import ALL_TOOLS
 from tools import TOOLS_MAP, JARVIS_CUSTOM_CALLABLES
 from dotenv import load_dotenv
 load_dotenv()
@@ -28,7 +27,7 @@ load_dotenv()
 # docstrings — Gemini genera el esquema automáticamente).
 # ---------------------------------------------------------------------------
 
-GEMINI_TOOLS = JARVIS_CUSTOM_CALLABLES + ALL_TOOLS
+GEMINI_TOOLS = JARVIS_CUSTOM_CALLABLES
 
 # ---------------------------------------------------------------------------
 # Esquema de herramientas para OpenAI (Function Calling manual)
@@ -253,90 +252,6 @@ OPENAI_TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
-    # ── ai-tools-hub / dev ────────────────────────────────────────────────
-    {
-        "type": "function",
-        "function": {
-            "name": "liberar_puerto",
-            "description": "Termina el proceso que está escuchando en el puerto TCP especificado.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "puerto": {"type": "integer", "description": "Número de puerto TCP (e.g. 8080, 4200, 3000)."}
-                },
-                "required": ["puerto"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "obtener_arbol_directorios",
-            "description": "Genera un árbol visual de directorios hasta el nivel de profundidad indicado.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ruta": {"type": "string", "description": "Ruta raíz del árbol. Acepta ~."},
-                    "profundidad": {"type": "integer", "description": "Máximo de niveles a mostrar (por defecto 2)."},
-                },
-                "required": ["ruta"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "listar_contenedores_activos",
-            "description": "Lista todos los contenedores Docker que están en ejecución.",
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "reiniciar_contenedor",
-            "description": "Reinicia un contenedor Docker identificado por su nombre o ID.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "nombre_o_id": {"type": "string", "description": "Nombre o ID del contenedor Docker."}
-                },
-                "required": ["nombre_o_id"],
-            },
-        },
-    },
-    # ── ai-tools-hub / interaction ────────────────────────────────────────
-    {
-        "type": "function",
-        "function": {
-            "name": "mostrar_notificacion",
-            "description": "Muestra una notificación nativa del sistema operativo.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "titulo": {"type": "string", "description": "Título de la notificación."},
-                    "mensaje": {"type": "string", "description": "Cuerpo / texto de la notificación."},
-                },
-                "required": ["titulo", "mensaje"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "redactar_email",
-            "description": "Abre el cliente de correo electrónico predeterminado con un borrador prellenado.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "destinatario": {"type": "string", "description": "Dirección de correo del destinatario."},
-                    "asunto": {"type": "string", "description": "Asunto del correo."},
-                    "cuerpo": {"type": "string", "description": "Cuerpo del mensaje."},
-                },
-                "required": ["destinatario", "asunto", "cuerpo"],
-            },
-        },
-    },
 ]
 
 SYSTEM_PROMPT = """Eres Jarvis, asistente personal de IA con carácter propio.
@@ -361,11 +276,6 @@ Capacidades:
 - Obtener información del sistema operativo (básica y detallada).
 - Ejecutar comandos de terminal de solo lectura (ls, df, ps, pip, etc.).
 - Capturar fotos con la webcam.
-- Liberar puertos TCP ocupados.
-- Mostrar el árbol de directorios de un proyecto.
-- Gestionar contenedores Docker (listar y reiniciar).
-- Mostrar notificaciones nativas del sistema operativo.
-- Redactar y abrir borradores de correo en el cliente de email predeterminado.
 
 === REGLA OBLIGATORIA: GENERACIÓN DE DOCUMENTOS ===
 Si el usuario pide crear, generar, escribir, elaborar, redactar o preparar cualquier tipo
