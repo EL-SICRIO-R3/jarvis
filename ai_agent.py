@@ -159,6 +159,14 @@ OPENAI_TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "tomar_captura_pantalla",
+            "description": "Toma un screenshot de la pantalla principal del sistema y lo guarda como PNG en un archivo temporal. Retorna la ruta del archivo.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
     # ── dev_tools ─────────────────────────────────────────────────────────
     {
         "type": "function",
@@ -208,6 +216,35 @@ OPENAI_TOOLS = [
                     "nombre_o_id": {"type": "string", "description": "Nombre o ID del contenedor Docker."}
                 },
                 "required": ["nombre_o_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "obtener_estado_git",
+            "description": "Ejecuta git status en el directorio de proyecto indicado y devuelve la salida como texto plano.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ruta_proyecto": {"type": "string", "description": "Ruta absoluta o relativa al directorio raíz del repositorio Git. Acepta ~."}
+                },
+                "required": ["ruta_proyecto"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analizar_ultimos_logs",
+            "description": "Lee y devuelve las últimas N líneas de un archivo de log de forma eficiente.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ruta_archivo": {"type": "string", "description": "Ruta absoluta o relativa al archivo de log. Acepta ~."},
+                    "lineas": {"type": "integer", "description": "Número de líneas finales a devolver (por defecto 50)."},
+                },
+                "required": ["ruta_archivo"],
             },
         },
     },
@@ -264,9 +301,12 @@ Capacidades:
 - Leer archivos de texto y PDFs.
 - Crear archivos de texto y listar directorios.
 - Capturar fotos con la webcam.
+- Tomar capturas de pantalla del escritorio.
 - Liberar puertos TCP ocupados.
 - Mostrar el árbol de directorios de un proyecto.
 - Gestionar contenedores Docker (listar y reiniciar).
+- Consultar el estado de un repositorio Git (git status).
+- Analizar las últimas líneas de un archivo de log.
 - Mostrar notificaciones nativas del sistema operativo.
 - Redactar y abrir borradores de correo en el cliente de email predeterminado.
 
