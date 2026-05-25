@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 import platform
 import subprocess
-import tempfile
+from pathlib import Path
 from typing import Callable
 
 
@@ -33,6 +33,16 @@ def _so() -> str:
     if s == "windows":
         return "windows"
     return "linux"
+
+
+def _img_dir() -> Path:
+    """
+    Devuelve la ruta ``<proyecto>/ia-tools/img`` y la crea si no existe.
+    El directorio raíz del proyecto se determina por la ubicación de este módulo.
+    """
+    img_dir = Path(__file__).parent / "ia-tools" / "img"
+    img_dir.mkdir(parents=True, exist_ok=True)
+    return img_dir
 
 
 # ---------------------------------------------------------------------------
@@ -302,7 +312,8 @@ def list_directory(directory_path: str = ".", show_hidden: bool = False) -> str:
 
 def capturar_foto_webcam() -> str:
     """
-    Captura una foto con la webcam principal del sistema y la guarda como JPEG.
+    Captura una foto con la webcam principal del sistema y la guarda como JPEG
+    en la carpeta ``ia-tools/img`` del proyecto.
     Retorna la ruta absoluta del archivo generado o un mensaje de error.
     """
     try:
@@ -317,7 +328,9 @@ def capturar_foto_webcam() -> str:
         ret, frame = cap.read()
         if not ret or frame is None:
             return "[Error: la webcam devolvió un frame vacío.]"
-        output_path = os.path.join(tempfile.gettempdir(), "webcam_snapshot.jpg")
+        import time as _time
+        ts = int(_time.time() * 1_000_000)
+        output_path = str(_img_dir() / f"webcam_{ts}.jpg")
         cv2.imwrite(output_path, frame)
         return output_path
     finally:
@@ -327,7 +340,8 @@ def capturar_foto_webcam() -> str:
 def tomar_captura_pantalla() -> str:
     """
     Toma un screenshot de la pantalla principal del sistema y lo guarda como PNG
-    en un archivo temporal. Retorna la ruta absoluta del archivo generado.
+    en la carpeta ``ia-tools/img`` del proyecto.
+    Retorna la ruta absoluta del archivo generado.
     """
     try:
         import mss  # type: ignore
@@ -338,7 +352,7 @@ def tomar_captura_pantalla() -> str:
     try:
         import time as _time
         ts = int(_time.time() * 1_000_000)  # microseconds — avoids same-second collisions
-        output_path = os.path.join(tempfile.gettempdir(), f"screenshot_{ts}.png")
+        output_path = str(_img_dir() / f"screenshot_{ts}.png")
         with mss.mss() as sct:
             monitor = sct.monitors[1]  # monitor principal
             screenshot = sct.grab(monitor)
