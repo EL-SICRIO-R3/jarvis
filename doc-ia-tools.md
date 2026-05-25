@@ -44,7 +44,8 @@ from ai_tools_hub import ALL_TOOLS
 | `pypdf` | Extracción de texto de PDFs |
 | `psutil` | Inspección de procesos y red |
 | `opencv-python` | Captura de webcam |
-| `plyer` *(opcional)* | Notificaciones nativas del SO |
+| `mss` | Captura de pantalla |
+| `plyer` | Notificaciones nativas del SO |
 | `google-generativeai` *(opcional)* | SDK de Gemini |
 
 ---
@@ -57,8 +58,8 @@ ai_tools_hub/
 ├── system_tools.py      # SO, portapapeles, comandos de terminal
 ├── web_tools.py         # Navegador, extracción de texto de URLs
 ├── file_tools.py        # Leer / crear archivos, listar directorios
-├── vision_tools.py      # Captura de webcam
-├── dev_tools.py         # Gestión de puertos, árbol de directorios, Docker
+├── vision_tools.py      # Captura de webcam y captura de pantalla
+├── dev_tools.py         # Gestión de puertos, árbol de directorios, Docker, Git, logs
 └── interaction_tools.py # Notificaciones de escritorio, cliente de correo
 ```
 
@@ -355,6 +356,30 @@ ruta = capturar_foto_webcam()
 print(ruta)  # → /tmp/webcam_snapshot.jpg
 ```
 
+### `tomar_captura_pantalla() -> str`
+
+**Descripción:** Toma un screenshot de la pantalla principal del sistema y lo guarda como PNG en un archivo temporal.
+
+**Parámetros:** Ninguno.
+
+**Retorna:**
+- La ruta absoluta del archivo PNG generado (`str`), e.g. `/tmp/screenshot_abc123.png`.
+- Mensaje de error `str` si no se detecta ningún monitor, `mss` no está instalado, o la captura falla.
+
+**Comportamiento:**
+- Usa la librería `mss`; captura el monitor `monitors[1]` (primera pantalla real).
+- Genera un archivo temporal único con prefijo `screenshot_` y extensión `.png`.
+- Libera todos los recursos después de la captura.
+- Requiere: `mss`.
+
+**Ejemplo:**
+```python
+from ai_tools_hub.vision_tools import tomar_captura_pantalla
+
+ruta = tomar_captura_pantalla()
+print(ruta)  # → /tmp/screenshot_abc123.png
+```
+
 ---
 
 ## Módulo `dev_tools`
@@ -477,6 +502,72 @@ print(reiniciar_contenedor("abc123def456"))
 
 ---
 
+### `obtener_estado_git(ruta_proyecto: str) -> str`
+
+**Descripción:** Ejecuta `git status` en el directorio de proyecto indicado y devuelve la salida como texto plano.
+
+**Parámetros:**
+| Nombre | Tipo | Obligatorio | Descripción |
+|---|---|---|---|
+| `ruta_proyecto` | `str` | ✅ | Ruta absoluta o relativa al directorio raíz del repositorio Git. Acepta `~`. |
+
+**Retorna:**
+- La salida estándar de `git status` como `str` (rama activa, archivos modificados, staged, sin seguimiento, etc.).
+- `"ℹ️  Sin cambios en el repositorio."` si el árbol de trabajo está limpio.
+- Mensaje de error `str` si la ruta no existe, no es un repositorio Git, Git no está instalado, el comando falla, o excede 30 segundos.
+
+**Comportamiento:**
+- Ejecuta `git status` con `cwd` apuntando a `ruta_proyecto`.
+- Timeout: **30 segundos**.
+- No lanza excepciones; siempre retorna `str`.
+
+**Ejemplo:**
+```python
+from ai_tools_hub.dev_tools import obtener_estado_git
+
+print(obtener_estado_git("/home/user/mi-proyecto"))
+# On branch main
+# Changes not staged for commit:
+#   modified:   src/app.py
+```
+
+---
+
+### `analizar_ultimos_logs(ruta_archivo: str, lineas: int = 50) -> str`
+
+**Descripción:** Lee y devuelve las últimas N líneas de un archivo de log de forma eficiente (lectura desde el final, sin cargar el archivo completo en memoria).
+
+**Parámetros:**
+| Nombre | Tipo | Obligatorio | Descripción |
+|---|---|---|---|
+| `ruta_archivo` | `str` | ✅ | Ruta absoluta o relativa al archivo de log. Acepta `~`. |
+| `lineas` | `int` | ❌ (default `50`) | Número de líneas finales a devolver. Debe ser un entero positivo. |
+
+**Retorna:**
+- Las últimas `lineas` líneas del archivo como `str`.
+- `"ℹ️  El archivo está vacío."` si el archivo no tiene contenido.
+- Mensaje de error `str` si el archivo no existe, `lineas < 1`, permiso denegado, o falla la lectura.
+
+**Comportamiento:**
+- Lee el archivo en binario desde el final usando chunks de 8 KB para minimizar el uso de memoria.
+- Decodifica con `utf-8` reemplazando caracteres inválidos (`errors="replace"`).
+- No lanza excepciones; siempre retorna `str`.
+
+**Ejemplo:**
+```python
+from ai_tools_hub.dev_tools import analizar_ultimos_logs
+
+# Últimas 50 líneas (por defecto)
+print(analizar_ultimos_logs("/var/log/app.log"))
+
+# Últimas 10 líneas
+print(analizar_ultimos_logs("/var/log/app.log", lineas=10))
+# [2024-01-15 12:00:01] INFO  Server started on port 8080
+# [2024-01-15 12:00:02] DEBUG Request received: GET /api/health
+```
+
+---
+
 ## Módulo `interaction_tools`
 
 ### `mostrar_notificacion(titulo: str, mensaje: str) -> str`
@@ -495,7 +586,7 @@ print(reiniciar_contenedor("abc123def456"))
 - Mensaje de error `str` en caso de excepción.
 
 **Comportamiento:**
-- Usa la librería `plyer` (debe instalarse aparte: `pip install plyer`).
+- Usa la librería `plyer` (incluida en las dependencias base).
 - La notificación permanece visible durante **10 segundos**.
 - El nombre de la app en la notificación es `"AI Tools Hub"`.
 - Compatible con macOS, Linux (con soporte de notificaciones), y Windows.
