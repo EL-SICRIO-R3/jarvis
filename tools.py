@@ -5,6 +5,10 @@ Funciones locales que el agente de IA puede invocar mediante Function Calling.
 Cada función representa una acción concreta que Jarvis puede ejecutar en el
 sistema operativo del usuario.
 
+Las herramientas genéricas (portapapeles, sistema, web, archivos, dev,
+interacción) provienen de la librería ``ai-tools-hub``.
+Las herramientas específicas de Jarvis se definen aquí.
+
 Todas las funciones deben:
   - Aceptar parámetros tipados.
   - Devolver siempre una cadena de texto con el resultado (éxito o error).
@@ -17,6 +21,27 @@ import subprocess
 from typing import Callable
 
 import pyperclip
+
+# ---------------------------------------------------------------------------
+# Importaciones de ai-tools-hub
+# ---------------------------------------------------------------------------
+
+from ai_tools_hub import ALL_TOOLS
+from ai_tools_hub.system_tools import (
+    get_clipboard_content,
+    get_os_info,
+    run_terminal_command,
+)
+from ai_tools_hub.web_tools import open_browser, extract_text_from_url
+from ai_tools_hub.file_tools import read_file, create_file, list_directory
+from ai_tools_hub.vision_tools import capturar_foto_webcam
+from ai_tools_hub.dev_tools import (
+    liberar_puerto,
+    obtener_arbol_directorios,
+    listar_contenedores_activos,
+    reiniciar_contenedor,
+)
+from ai_tools_hub.interaction_tools import mostrar_notificacion, redactar_email
 
 
 # ---------------------------------------------------------------------------
@@ -34,25 +59,8 @@ def _sistema_operativo() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Herramientas del portapapeles
+# Herramientas del portapapeles (Jarvis-específicas)
 # ---------------------------------------------------------------------------
-
-def obtener_portapapeles() -> str:
-    """
-    Lee y retorna el texto actual del portapapeles del sistema.
-
-    Returns:
-        str: El texto copiado o un mensaje de error si el portapapeles
-             está vacío o no contiene texto.
-    """
-    try:
-        texto = pyperclip.paste()
-        if not texto or not texto.strip():
-            return "[Portapapeles vacío o sin texto]"
-        return texto
-    except Exception as exc:  # noqa: BLE001
-        return f"[Error al leer el portapapeles: {exc}]"
-
 
 def copiar_al_portapapeles(texto: str) -> str:
     """
@@ -239,33 +247,46 @@ def guardar_documento(contenido: str, nombre_archivo: str = "documento.txt", rut
 
 
 # ---------------------------------------------------------------------------
-# Herramientas del sistema
-# ---------------------------------------------------------------------------
-
-def obtener_info_sistema() -> str:
-    """
-    Retorna información básica del sistema operativo.
-
-    Returns:
-        str: Cadena con el nombre del SO, versión y arquitectura.
-    """
-    return (
-        f"Sistema: {platform.system()} {platform.release()} "
-        f"({platform.machine()}) | Python {platform.python_version()}"
-    )
-
-
-# ---------------------------------------------------------------------------
 # Registro de herramientas disponibles para el agente
 # ---------------------------------------------------------------------------
 
+# Herramientas propias de Jarvis (no incluidas en ai-tools-hub)
+JARVIS_CUSTOM_CALLABLES: list[Callable[..., str]] = [
+    copiar_al_portapapeles,
+    abrir_vscode,
+    abrir_aplicacion,
+    abrir_navegador,
+    guardar_nota,
+    guardar_documento,
+]
+
 TOOLS_MAP: dict[str, Callable[..., str]] = {
-    "obtener_portapapeles": obtener_portapapeles,
+    # Jarvis-específicas
     "copiar_al_portapapeles": copiar_al_portapapeles,
     "abrir_vscode": abrir_vscode,
     "abrir_aplicacion": abrir_aplicacion,
     "abrir_navegador": abrir_navegador,
     "guardar_nota": guardar_nota,
     "guardar_documento": guardar_documento,
-    "obtener_info_sistema": obtener_info_sistema,
+    # ai-tools-hub / system
+    "get_clipboard_content": get_clipboard_content,
+    "get_os_info": get_os_info,
+    "run_terminal_command": run_terminal_command,
+    # ai-tools-hub / web
+    "open_browser": open_browser,
+    "extract_text_from_url": extract_text_from_url,
+    # ai-tools-hub / file
+    "read_file": read_file,
+    "create_file": create_file,
+    "list_directory": list_directory,
+    # ai-tools-hub / vision
+    "capturar_foto_webcam": capturar_foto_webcam,
+    # ai-tools-hub / dev
+    "liberar_puerto": liberar_puerto,
+    "obtener_arbol_directorios": obtener_arbol_directorios,
+    "listar_contenedores_activos": listar_contenedores_activos,
+    "reiniciar_contenedor": reiniciar_contenedor,
+    # ai-tools-hub / interaction
+    "mostrar_notificacion": mostrar_notificacion,
+    "redactar_email": redactar_email,
 }
