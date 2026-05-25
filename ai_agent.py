@@ -16,7 +16,7 @@ Variables de entorno necesarias (al menos una):
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Callable, Optional
 
 from ai_tools_hub import ALL_TOOLS
 from dotenv import load_dotenv
@@ -34,7 +34,7 @@ GEMINI_TOOLS = ALL_TOOLS
 # Mapa nombre → callable para la ejecución de herramientas
 # ---------------------------------------------------------------------------
 
-TOOLS_MAP: dict[str, object] = {fn.__name__: fn for fn in ALL_TOOLS}
+TOOLS_MAP: dict[str, Callable[..., str]] = {fn.__name__: fn for fn in ALL_TOOLS}
 
 # ---------------------------------------------------------------------------
 # Esquema de herramientas para OpenAI (Function Calling manual)
@@ -297,7 +297,7 @@ class JarvisAgent:
     def __init__(self, provider: Optional[str] = None) -> None:
         self._provider = self._resolve_provider(provider)
         self._history: list[dict] = []
-        self.last_saved_path: Optional[str] = None  # última ruta de archivo guardado
+        self.last_saved_path: Optional[str] = None  # leído por gui.py para ofrecer "abrir archivo"
 
         if self._provider == "gemini":
             self._init_gemini()
