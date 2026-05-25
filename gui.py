@@ -102,6 +102,11 @@ class JarvisWindow(_DND_BASE):
         self._doc_preview_t0: float        = 0.0   # timestamp absoluto (time.time())
         self._doc_preview_rect             = None  # bounds para clic-to-open
 
+        self._capture_preview_path: str | None = None  # ruta imagen capturada (webcam/pantalla)
+        self._capture_preview_tk           = None       # ImageTk para el thumbnail
+        self._capture_preview_t0: float    = 0.0
+        self._capture_preview_rect         = None
+
 
         self._configure_window()
         self._build_ui()
@@ -483,8 +488,95 @@ class JarvisWindow(_DND_BASE):
         else:
             self._doc_preview_rect = None
 
-    @staticmethod
-    def _blend(hex_col: str, alpha: float) -> str:
+        # ── Preview imagen capturada (webcam / pantalla) ──────────────────────
+        if self._capture_preview_path:
+            _CAP_SHOW, _CAP_FADE = 10.0, 3.0
+            _age = time.time() - self._capture_preview_t0
+            if _age >= _CAP_SHOW:
+                self._capture_preview_path = None
+                self._capture_preview_tk   = None
+                self._capture_preview_rect = None
+            else:
+                if _age < _CAP_SHOW - _CAP_FADE:
+                    _da = 1.0
+                else:
+                    _da = max(0.0, 1.0 - (_age - (_CAP_SHOW - _CAP_FADE)) / _CAP_FADE)
+                _slide = int(18 * max(0.0, 1.0 - _age / 0.45))
+
+                _dpath = self._capture_preview_path
+                _fname = os.path.basename(_dpath)
+                _dc    = lambda hx, a, _d=_da: self._blend(hx, a * _d)  # noqa: E731
+
+                _cw, _ch = 210, 82
+                _cx1 = W - _cw - 12
+                _cy1 = H - _ch - 12 + _slide
+                _cx2, _cy2 = _cx1 + _cw, _cy1 + _ch
+
+                # Sombra sólida exterior
+                c.create_rectangle(_cx1 - 4, _cy1 - 4, _cx2 + 4, _cy2 + 4,
+                                    fill="#000000", outline="")
+                # Triple glow
+                for _g, _ga in ((5, 0.05), (3, 0.11), (1, 0.20)):
+                    c.create_rectangle(_cx1 - _g, _cy1 - _g, _cx2 + _g, _cy2 + _g,
+                                        outline=_dc(col, _ga), width=1, fill="")
+                # Fondo oscuro
+                c.create_rectangle(_cx1, _cy1, _cx2, _cy2,
+                                    fill=self._blend("#090909", max(0.04, _da)), outline="")
+                # Borde
+                c.create_rectangle(_cx1, _cy1, _cx2, _cy2,
+                                    outline=_dc(col, 0.38), width=1, fill="")
+                # Esquinas HUD
+                for _sx, _sy, _ddx, _ddy in (
+                    (_cx1, _cy1, +1, +1), (_cx2, _cy1, -1, +1),
+                    (_cx1, _cy2, +1, -1), (_cx2, _cy2, -1, -1),
+                ):
+                    c.create_line(_sx, _sy, _sx + _ddx * 10, _sy,
+                                  fill=_dc(col, 0.90), width=2)
+                    c.create_line(_sx, _sy, _sx, _sy + _ddy * 10,
+                                  fill=_dc(col, 0.90), width=2)
+
+                # Thumbnail de imagen (si está disponible)
+                _text_x = _cx1 + 10
+                if self._capture_preview_tk:
+                    _iw = self._capture_preview_tk.width()
+                    _ih = self._capture_preview_tk.height()
+                    _ix = _cx1 + 8
+                    _iy = _cy1 + (_ch - _ih) // 2
+                    c.create_image(_ix, _iy, image=self._capture_preview_tk, anchor="nw")
+                    _text_x = _ix + _iw + 8
+
+                # Nombre de archivo
+                _fn_s = _fname if len(_fname) <= 20 else _fname[:17] + "\u2026"
+                c.create_text(_text_x, _cy1 + 16, text=_fn_s, anchor="w",
+                              fill=_dc("#EEEEEE", 0.92),
+                              font=("Helvetica Neue", 10, "bold"))
+
+                # Subtítulo: tipo de captura
+                _type_lbl = "Captura de pantalla" if "screenshot" in _fname else "Foto webcam"
+                c.create_text(_text_x, _cy1 + 30, text=_type_lbl, anchor="w",
+                              fill=_dc("#888888", 0.80),
+                              font=("Helvetica Neue", 8))
+
+                # Barra de tiempo restante
+                _pb_x  = _cx1 + 8
+                _pb_y  = _cy2 - 14
+                _pb_w  = _cw - 16
+                _pb_p  = max(0.0, 1.0 - _age / _CAP_SHOW)
+                c.create_rectangle(_pb_x, _pb_y, _pb_x + _pb_w, _pb_y + 2,
+                                    fill=self._blend("#1A1A1A", max(0.04, _da)), outline="")
+                if _pb_p > 0:
+                    c.create_rectangle(_pb_x, _pb_y,
+                                        _pb_x + int(_pb_w * _pb_p), _pb_y + 2,
+                                        fill=_dc(col, 0.50), outline="")
+
+                # Hint
+                c.create_text(_cx1 + _cw // 2, _cy2 - 4,
+                              text="\u00b7 clic para abrir \u00b7",
+                              fill=_dc(col, 0.45),
+                              font=("Helvetica Neue", 8))
+                self._capture_preview_rect = (_cx1, _cy1, _cx2, _cy2)
+        else:
+            self._capture_preview_rect = None
         r = int(hex_col[1:3], 16)
         g = int(hex_col[3:5], 16)
         b = int(hex_col[5:7], 16)
@@ -511,6 +603,11 @@ class JarvisWindow(_DND_BASE):
             x1, y1, x2, y2 = self._doc_preview_rect
             if x1 <= event.x <= x2 and y1 <= event.y <= y2:
                 subprocess.Popen(["open", self._doc_preview_path])
+                return
+        if self._capture_preview_rect and self._capture_preview_path:
+            x1, y1, x2, y2 = self._capture_preview_rect
+            if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                subprocess.Popen(["open", self._capture_preview_path])
                 return
         self._interrupt()
 
@@ -569,6 +666,19 @@ class JarvisWindow(_DND_BASE):
         self._doc_preview_path = path
         self._doc_preview_t0   = time.time()
         self._doc_preview_rect = None
+
+    def _show_capture_preview(self, path: str) -> None:
+        """Activa la tarjeta de preview de imagen capturada (webcam / pantalla)."""
+        try:
+            from PIL import Image as _PILImg, ImageTk as _ITk  # type: ignore
+            _img = _PILImg.open(path)
+            _img.thumbnail((72, 56), _PILImg.LANCZOS)
+            self._capture_preview_tk = _ITk.PhotoImage(_img)
+        except Exception:
+            self._capture_preview_tk = None
+        self._capture_preview_path = path
+        self._capture_preview_t0   = time.time()
+        self._capture_preview_rect = None
     # ── Voz ────────────────────────────────────────────────────────────────────
     def _init_voice(self) -> None:
         def _setup() -> None:
@@ -754,6 +864,12 @@ class JarvisWindow(_DND_BASE):
                 _saved = self._agent.last_saved_path
                 self._agent.last_saved_path = None
                 self.after(0, lambda p=_saved: self._show_doc_preview(p))
+
+            # ── Notificar imagen capturada ────────────────────────────────────
+            if self._agent and self._agent.last_captured_image_path:
+                _cpath = self._agent.last_captured_image_path
+                self._agent.last_captured_image_path = None
+                self.after(0, lambda p=_cpath: self._show_capture_preview(p))
 
             self._show_response(f"Jarvis: {reply}")
             self._transition(_SPEAKING)

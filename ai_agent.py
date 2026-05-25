@@ -300,8 +300,8 @@ Capacidades:
 - Extraer el texto de cualquier página web.
 - Leer archivos de texto y PDFs.
 - Crear archivos de texto y listar directorios.
-- Capturar fotos con la webcam.
-- Tomar capturas de pantalla del escritorio.
+- Capturar fotos con la webcam y analizarlas visualmente.
+- Tomar capturas de pantalla del escritorio y analizarlas visualmente.
 - Liberar puertos TCP ocupados.
 - Mostrar el árbol de directorios de un proyecto.
 - Gestionar contenedores Docker (listar y reiniciar).
@@ -315,6 +315,7 @@ Reglas operativas:
 2. Respuestas cortas por defecto; desarrolla solo cuando la complejidad lo exige.
 3. Usa la herramienta apropiada cuando el usuario pide ejecutar algo en la computadora.
 4. Si no sabes algo, dilo claramente. Nunca inventes información.
+5. Cuando captures una imagen (webcam o pantalla), recibirás los datos visuales de forma directa: descríbela, analízala e identifica su contenido con detalle.
 """
 
 
@@ -334,10 +335,14 @@ class JarvisAgent:
 
     SUPPORTED_PROVIDERS = ("gemini", "openai")
 
+    # Herramientas que devuelven una ruta de imagen capturada
+    _VISION_CAPTURE_TOOLS = frozenset({"capturar_foto_webcam", "tomar_captura_pantalla"})
+
     def __init__(self, provider: Optional[str] = None) -> None:
         self._provider = self._resolve_provider(provider)
         self._history: list[dict] = []
-        self.last_saved_path: Optional[str] = None  # leído por gui.py para ofrecer "abrir archivo"
+        self.last_saved_path: Optional[str] = None          # leído por gui.py para ofrecer "abrir archivo"
+        self.last_captured_image_path: Optional[str] = None  # leído por gui.py para mostrar preview
 
         if self._provider == "gemini":
             self._init_gemini()
@@ -419,6 +424,7 @@ class JarvisAgent:
         Returns:
             str: Respuesta textual final del asistente.
         """
+        self.last_captured_image_path = None
         if self._provider == "gemini":
             return self._send_gemini(user_message)
         return self._send_openai(user_message)
@@ -433,6 +439,7 @@ class JarvisAgent:
         Returns:
             str: Respuesta textual del asistente.
         """
+        self.last_captured_image_path = None
         if self._provider == "gemini":
             return self._send_gemini_with_image(user_message, image_path)
         # OpenAI vision fallback — si no hay soporte, degradar a texto
@@ -471,6 +478,8 @@ class JarvisAgent:
 
             # Ejecutar cada herramienta y construir las respuestas
             tool_responses = []
+            captured_images: list = []  # (PIL.Image, path) para herramientas de visión
+
             for call in tool_calls:
                 resultado = self._execute_tool(call.name, dict(call.args))
                 tool_responses.append(
@@ -481,8 +490,23 @@ class JarvisAgent:
                         )
                     )
                 )
+                # Si es una herramienta de captura de imagen, cargar la imagen
+                if call.name in self._VISION_CAPTURE_TOOLS:
+                    _path = resultado.strip()
+                    if not _path.startswith("[") and os.path.isfile(_path):
+                        try:
+                            from PIL import Image as _PILImg  # type: ignore
+                            captured_images.append((_PILImg.open(_path), _path))
+                        except Exception:
+                            pass
 
-            response = self._chat.send_message(tool_responses)
+            # Si se capturaron imágenes, incluirlas en el mensaje para análisis visual
+            if captured_images:
+                self.last_captured_image_path = captured_images[-1][1]
+                parts: list = list(tool_responses) + [img for img, _ in captured_images]
+                response = self._chat.send_message(parts)
+            else:
+                response = self._chat.send_message(tool_responses)
 
         # Extraer texto de la respuesta final
         try:
@@ -568,6 +592,7 @@ class JarvisAgent:
             messages.append(message)
 
             # Ejecutar cada herramienta
+            captured_image_paths: list[str] = []
             for tool_call in message.tool_calls:
                 try:
                     args = json.loads(tool_call.function.arguments)
@@ -583,6 +608,36 @@ class JarvisAgent:
                         "content": resultado,
                     }
                 )
+                # Registrar imágenes capturadas para envío visual
+                if tool_call.function.name in self._VISION_CAPTURE_TOOLS:
+                    _path = resultado.strip()
+                    if not _path.startswith("[") and os.path.isfile(_path):
+                        captured_image_paths.append(_path)
+
+            # Si se capturaron imágenes, inyectarlas como mensaje de visión
+            if captured_image_paths:
+                import base64
+                vision_content: list = []
+                for _p in captured_image_paths:
+                    _ext = os.path.splitext(_p)[1].lower().lstrip(".")
+                    if _ext == "jpg":
+                        _ext = "jpeg"
+                    try:
+                        with open(_p, "rb") as _f:
+                            _b64 = base64.b64encode(_f.read()).decode()
+                        vision_content.append({
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/{_ext};base64,{_b64}"},
+                        })
+                    except Exception:
+                        pass
+                if vision_content:
+                    vision_content.append({
+                        "type": "text",
+                        "text": "Imagen(es) capturada(s). Descríbelas al usuario en detalle.",
+                    })
+                    messages.append({"role": "user", "content": vision_content})
+                self.last_captured_image_path = captured_image_paths[-1]
 
     # ------------------------------------------------------------------
     # Ejecución de herramientas
