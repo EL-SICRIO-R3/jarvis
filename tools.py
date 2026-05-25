@@ -254,8 +254,7 @@ def create_file(file_path: str, content: str, overwrite: bool = False) -> str:
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
         size = os.path.getsize(path)
-        label = "updated" if action == "updated" else "created"
-        return f"File {label} successfully: {path} ({size} bytes)"
+        return f"File {action} successfully: {path} ({size} bytes)"
     except PermissionError:
         return f"[Error: permiso denegado para escribir en '{path}'.]"
     except Exception as exc:  # noqa: BLE001
