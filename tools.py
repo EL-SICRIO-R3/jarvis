@@ -14,6 +14,8 @@ Todas las funciones deben:
 import os
 import platform
 import subprocess
+import time
+import urllib.request
 from typing import Callable
 
 import pyperclip
@@ -256,6 +258,81 @@ def obtener_info_sistema() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Herramientas de generación de imágenes
+# ---------------------------------------------------------------------------
+
+def generar_imagen(descripcion: str, nombre_archivo: str = "") -> str:
+    """
+    Genera una imagen a partir de una descripción de texto usando IA
+    (DALL-E 3 si hay OPENAI_API_KEY, o Imagen de Google si hay GEMINI_API_KEY).
+    Guarda la imagen en el escritorio y devuelve su ruta.
+
+    Args:
+        descripcion:    Descripción detallada de la imagen a generar.
+        nombre_archivo: Nombre del archivo de destino (sin extensión o con .png/.jpg).
+                        Si está vacío, se genera automáticamente.
+
+    Returns:
+        str: Ruta completa de la imagen generada (prefijo 'Imagen generada en: ')
+             o mensaje de error.
+    """
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    openai_key  = os.getenv("OPENAI_API_KEY")
+    gemini_key  = os.getenv("GEMINI_API_KEY")
+
+    # Construir nombre de archivo
+    if not nombre_archivo:
+        nombre_archivo = f"jarvis_imagen_{int(time.time())}.png"
+    elif not nombre_archivo.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+        nombre_archivo += ".png"
+
+    escritorio = os.path.join(os.path.expanduser("~"), "Desktop")
+    os.makedirs(escritorio, exist_ok=True)
+    ruta = os.path.join(escritorio, nombre_archivo)
+
+    # ── Intento 1: OpenAI DALL-E 3 ──────────────────────────────────────────
+    if openai_key:
+        try:
+            from openai import OpenAI  # type: ignore
+            client = OpenAI(api_key=openai_key)
+            response = client.images.generate(
+                model="dall-e-3",
+                prompt=descripcion,
+                size="1024x1024",
+                quality="standard",
+                n=1,
+            )
+            url = response.data[0].url
+            urllib.request.urlretrieve(url, ruta)
+            return f"Imagen generada en: {ruta}"
+        except Exception as exc:  # noqa: BLE001
+            return f"[Error al generar imagen con DALL-E: {exc}]"
+
+    # ── Intento 2: Google Imagen (Gemini API) ────────────────────────────────
+    if gemini_key:
+        try:
+            import google.generativeai as genai  # type: ignore
+            genai.configure(api_key=gemini_key)
+            imagen = genai.ImageGenerationModel("imagen-3.0-generate-001")
+            result = imagen.generate_images(
+                prompt=descripcion,
+                number_of_images=1,
+                aspect_ratio="1:1",
+            )
+            result.images[0].save(ruta)
+            return f"Imagen generada en: {ruta}"
+        except Exception as exc:  # noqa: BLE001
+            return f"[Error al generar imagen con Imagen: {exc}]"
+
+    return (
+        "[Error: se necesita OPENAI_API_KEY o GEMINI_API_KEY "
+        "para generar imágenes.]"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Registro de herramientas disponibles para el agente
 # ---------------------------------------------------------------------------
 
@@ -268,4 +345,5 @@ TOOLS_MAP: dict[str, Callable[..., str]] = {
     "guardar_nota": guardar_nota,
     "guardar_documento": guardar_documento,
     "obtener_info_sistema": obtener_info_sistema,
+    "generar_imagen": generar_imagen,
 }

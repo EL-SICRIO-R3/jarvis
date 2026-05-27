@@ -102,6 +102,11 @@ class JarvisWindow(_DND_BASE):
         self._doc_preview_t0: float        = 0.0   # timestamp absoluto (time.time())
         self._doc_preview_rect             = None  # bounds para clic-to-open
 
+        self._gen_img_preview_path: str | None = None  # ruta última imagen generada
+        self._gen_img_preview_tk           = None       # ImageTk para preview
+        self._gen_img_preview_t0: float    = 0.0
+        self._gen_img_preview_rect         = None  # bounds para clic-to-open / dismiss
+
 
         self._configure_window()
         self._build_ui()
@@ -483,6 +488,104 @@ class JarvisWindow(_DND_BASE):
         else:
             self._doc_preview_rect = None
 
+        # ── Preview imagen generada por IA ────────────────────────────────────
+        if self._gen_img_preview_tk and self._gen_img_preview_path:
+            _IMG_SHOW, _IMG_FADE = 20.0, 5.0
+            _age = time.time() - self._gen_img_preview_t0
+            if _age >= _IMG_SHOW:
+                self._gen_img_preview_path = None
+                self._gen_img_preview_tk   = None
+                self._gen_img_preview_rect = None
+            else:
+                if _age < _IMG_SHOW - _IMG_FADE:
+                    _ia = 1.0
+                else:
+                    _ia = max(0.0, 1.0 - (_age - (_IMG_SHOW - _IMG_FADE)) / _IMG_FADE)
+                # Desliz de entrada (primeros 0.45 s: baja desde arriba)
+                _slide = int(18 * max(0.0, 1.0 - _age / 0.45))
+
+                _iw = self._gen_img_preview_tk.width()
+                _ih = self._gen_img_preview_tk.height()
+                _pad = 12
+                # Centrar horizontalmente, zona superior del canvas
+                _ix1 = (W - _iw) // 2 - _pad
+                _iy1 = 20 + _slide
+                _ix2 = _ix1 + _iw + _pad * 2
+                _iy2 = _iy1 + _ih + _pad * 2 + 22  # +22 para barra inferior
+
+                _ic = lambda hx, a, _d=_ia: self._blend(hx, a * _d)  # noqa: E731
+
+                # Sombra sólida exterior
+                c.create_rectangle(
+                    _ix1 - 6, _iy1 - 6, _ix2 + 6, _iy2 + 6,
+                    fill="#000000", outline="",
+                )
+                # Triple glow
+                for _g, _ga in ((6, 0.06), (4, 0.14), (2, 0.24)):
+                    c.create_rectangle(
+                        _ix1 - _g, _iy1 - _g, _ix2 + _g, _iy2 + _g,
+                        outline=_ic(col, _ga), width=1, fill="",
+                    )
+                # Fondo oscuro
+                c.create_rectangle(_ix1, _iy1, _ix2, _iy2, fill="#080808", outline="")
+                # Borde interior sutil
+                c.create_rectangle(
+                    _ix1, _iy1, _ix2, _iy2,
+                    outline=_ic(col, 0.40), width=1, fill="",
+                )
+                # Esquinas HUD
+                _clen = 14
+                _cc   = _ic(col, 1.0)
+                for _sx, _sy, _ddx, _ddy in (
+                    (_ix1, _iy1, +1, +1), (_ix2, _iy1, -1, +1),
+                    (_ix1, _iy2, +1, -1), (_ix2, _iy2, -1, -1),
+                ):
+                    c.create_line(_sx, _sy, _sx + _ddx * _clen, _sy, fill=_cc, width=2)
+                    c.create_line(_sx, _sy, _sx, _sy + _ddy * _clen, fill=_cc, width=2)
+
+                # Imagen centrada dentro del marco
+                c.create_image(_ix1 + _pad, _iy1 + _pad,
+                               image=self._gen_img_preview_tk, anchor="nw")
+
+                # Barra de tiempo restante
+                _pb_x = _ix1 + 10
+                _pb_y = _iy2 - 14
+                _pb_w = (_ix2 - _ix1) - 20
+                _pb_p = max(0.0, 1.0 - _age / _IMG_SHOW)
+                c.create_rectangle(_pb_x, _pb_y, _pb_x + _pb_w, _pb_y + 2,
+                                   fill=self._blend("#1A1A1A", max(0.04, _ia)), outline="")
+                if _pb_p > 0:
+                    c.create_rectangle(_pb_x, _pb_y,
+                                       _pb_x + int(_pb_w * _pb_p), _pb_y + 2,
+                                       fill=_ic(col, 0.55), outline="")
+
+                # Hint centrado
+                c.create_text(
+                    W // 2, _iy2 - 5,
+                    text="\u00b7 clic para abrir  ·  × para cerrar \u00b7",
+                    fill=_ic(col, 0.50),
+                    font=("Helvetica Neue", 8),
+                )
+
+                # Botón × circular (esquina superior derecha del marco)
+                _cr  = 10
+                _ccx = _ix2 + _cr - 1
+                _ccy = _iy1 - _cr + 1
+                c.create_oval(
+                    _ccx - _cr, _ccy - _cr, _ccx + _cr, _ccy + _cr,
+                    fill="#111111", outline=_ic(col, 0.65), width=1,
+                )
+                c.create_text(
+                    _ccx, _ccy, text="×",
+                    fill=_ic(col, 0.95),
+                    font=("Helvetica Neue", 12, "bold"),
+                )
+                self._gen_img_preview_rect = (_ix1, _iy1, _ix2, _iy2,
+                                               _ccx - _cr, _ccy - _cr,
+                                               _ccx + _cr, _ccy + _cr)
+        else:
+            self._gen_img_preview_rect = None
+
     @staticmethod
     def _blend(hex_col: str, alpha: float) -> str:
         r = int(hex_col[1:3], 16)
@@ -506,6 +609,18 @@ class JarvisWindow(_DND_BASE):
             x1, y1, x2, y2 = self._img_drop_rect
             if x1 <= event.x <= x2 and y1 <= event.y <= y2:
                 self.after(0, self._open_image_dialog)
+                return
+        if self._gen_img_preview_rect and self._gen_img_preview_path:
+            ix1, iy1, ix2, iy2, cx1, cy1, cx2, cy2 = self._gen_img_preview_rect
+            # Botón × → cerrar preview
+            if cx1 <= event.x <= cx2 and cy1 <= event.y <= cy2:
+                self._gen_img_preview_path = None
+                self._gen_img_preview_tk   = None
+                self._gen_img_preview_rect = None
+                return
+            # Clic dentro del marco → abrir archivo
+            if ix1 <= event.x <= ix2 and iy1 <= event.y <= iy2:
+                subprocess.Popen(["open", self._gen_img_preview_path])
                 return
         if self._doc_preview_rect and self._doc_preview_path:
             x1, y1, x2, y2 = self._doc_preview_rect
@@ -569,6 +684,19 @@ class JarvisWindow(_DND_BASE):
         self._doc_preview_path = path
         self._doc_preview_t0   = time.time()
         self._doc_preview_rect = None
+
+    def _show_gen_image_preview(self, path: str) -> None:
+        """Carga y activa el preview de la imagen generada por IA."""
+        try:
+            from PIL import Image, ImageTk as _ITk
+            img = Image.open(path)
+            img.thumbnail((300, 300), Image.LANCZOS)
+            self._gen_img_preview_tk   = _ITk.PhotoImage(img)
+            self._gen_img_preview_path = path
+            self._gen_img_preview_t0   = time.time()
+            self._gen_img_preview_rect = None
+        except Exception as exc:
+            self._set_status(f"Error al mostrar imagen generada: {exc}")
     # ── Voz ────────────────────────────────────────────────────────────────────
     def _init_voice(self) -> None:
         def _setup() -> None:
@@ -754,6 +882,12 @@ class JarvisWindow(_DND_BASE):
                 _saved = self._agent.last_saved_path
                 self._agent.last_saved_path = None
                 self.after(0, lambda p=_saved: self._show_doc_preview(p))
+
+            # ── Notificar imagen generada ─────────────────────────────────────
+            if self._agent and self._agent.last_generated_image:
+                _img_path = self._agent.last_generated_image
+                self._agent.last_generated_image = None
+                self.after(0, lambda p=_img_path: self._show_gen_image_preview(p))
 
             self._show_response(f"Jarvis: {reply}")
             self._transition(_SPEAKING)

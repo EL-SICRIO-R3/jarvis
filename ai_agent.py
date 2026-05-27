@@ -148,6 +148,29 @@ GEMINI_FUNCTION_DECLARATIONS = [
         "description": "Retorna información básica del sistema operativo (SO, versión, arquitectura).",
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
+    {
+        "name": "generar_imagen",
+        "description": (
+            "Genera una imagen a partir de una descripción de texto usando IA (DALL-E o Imagen de Google). "
+            "Guarda la imagen en el escritorio y muestra una vista previa en pantalla. "
+            "Usa esta herramienta cuando el usuario pida: genera una imagen, crea una imagen, "
+            "dibuja, ilustra, muéstrame una imagen de X, hazme una foto de X, etc."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "descripcion": {
+                    "type": "string",
+                    "description": "Descripción detallada en inglés o español de la imagen a generar.",
+                },
+                "nombre_archivo": {
+                    "type": "string",
+                    "description": "Nombre del archivo de destino (opcional). Ejemplo: 'paisaje.png'.",
+                },
+            },
+            "required": ["descripcion"],
+        },
+    },
 ]
 
 # Definición equivalente para OpenAI (tools schema)
@@ -180,6 +203,7 @@ Capacidades:
 - Guardar notas rápidas en el escritorio.
 - Generar y guardar documentos (informes, reportes, resúmenes, cartas, listas) en el escritorio.
 - Obtener información del sistema operativo.
+- Generar imágenes con IA y mostrar una vista previa en pantalla.
 
 === REGLA OBLIGATORIA: GENERACIÓN DE DOCUMENTOS ===
 Si el usuario pide crear, generar, escribir, elaborar, redactar o preparar cualquier tipo
@@ -221,6 +245,7 @@ class JarvisAgent:
         self._provider = self._resolve_provider(provider)
         self._history: list[dict] = []
         self.last_saved_path: Optional[str] = None  # última ruta de doc/nota guardada
+        self.last_generated_image: Optional[str] = None  # última imagen generada
 
         if self._provider == "gemini":
             self._init_gemini()
@@ -287,6 +312,8 @@ class JarvisAgent:
     def reset_history(self) -> None:
         """Reinicia el historial de conversación."""
         self._history = []
+        self.last_saved_path = None
+        self.last_generated_image = None
         if self._provider == "gemini":
             self._chat = self._client.start_chat(history=[])
 
@@ -490,6 +517,8 @@ class JarvisAgent:
             resultado = str(func(**args))
             if nombre in ("guardar_nota", "guardar_documento") and "en: " in resultado:
                 self.last_saved_path = resultado.split("en: ", 1)[1].strip()
+            if nombre == "generar_imagen" and resultado.startswith("Imagen generada en: "):
+                self.last_generated_image = resultado.split("en: ", 1)[1].strip()
             return resultado
         except TypeError as exc:
             return f"[Error de argumentos en '{nombre}': {exc}]"
