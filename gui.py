@@ -1308,10 +1308,10 @@ class JarvisWindow(_DND_BASE):
         _sep(50)
 
         # ── Voz del agente ───────────────────────────────────────────────
-        # Usar voces ElevenLabs si hay clave; si no, Edge-TTS
+        # Si hay clave ElevenLabs, mostrar también voces neural como respaldo.
         if _ELEVENLABS_API_KEY:
-            _active_voices = _ELEVEN_VOICES
-            voice_label = "VOZ DEL AGENTE  (ElevenLabs ✦)"
+            _active_voices = _ELEVEN_VOICES + _EDGE_VOICES
+            voice_label = "VOZ DEL AGENTE  (ElevenLabs ✦ + Neural)"
         else:
             _active_voices = _EDGE_VOICES
             voice_label = "VOZ DEL AGENTE"
