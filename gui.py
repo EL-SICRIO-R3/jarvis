@@ -60,6 +60,16 @@ _SPHERE_R     = 0.26  # radio como fraccion de min(W,H)
 _CONNECT_D3   = 0.68  # umbral de conexion en distancia de cuerda 3D
 _FPS          = 30
 
+_WIDGET_W, _WIDGET_H = 220, 220        # dimensiones del modo widget
+_EDGE_VOICES = [                       # voces neural edge-tts (español)
+    ("Jorge · México  (Neural)", "es-MX-JorgeNeural"),
+    ("Dalia · México  (Neural)", "es-MX-DaliaNeural"),
+    ("Álvaro · España (Neural)", "es-ES-AlvaroNeural"),
+    ("Elvira · España (Neural)", "es-ES-ElviraNeural"),
+    ("Elena · Argentina (Neural)", "es-AR-ElenaNeural"),
+    ("Tomás · Argentina (Neural)", "es-AR-TomasNeural"),
+]
+
 
 class _Particle:
     """Punto en la superficie de una esfera unitaria — distribucion Fibonacci."""
@@ -107,6 +117,17 @@ class JarvisWindow(_DND_BASE):
         self._capture_preview_t0: float    = 0.0
         self._capture_preview_rect         = None
 
+        # ── Ajustes ──────────────────────────────────────────────────────────
+        self._selected_voice: str = "es-MX-JorgeNeural"
+        self._text_mode: bool     = False
+        self._widget_mode: bool   = False
+        self._restore_geometry: str = f"{_W}x{_H}"
+        self._drag_x: int = 0
+        self._drag_y: int = 0
+        self._widget_restore_rect  = None
+        self._settings_win         = None
+        self._bottom_frame         = None   # asignado en _build_ui
+        self._btns_row             = None   # asignado en _build_ui
 
         self._configure_window()
         self._build_ui()
@@ -135,9 +156,9 @@ class JarvisWindow(_DND_BASE):
         )
         self._canvas.pack(side="top", fill="both", expand=True)
 
-        bottom = tk.Frame(self, bg="black", height=_BOTTOM_H)
+        bottom = tk.Frame(self, bg="black")
         bottom.pack(side="bottom", fill="x")
-        bottom.pack_propagate(False)
+        self._bottom_frame = bottom
 
         self._lbl_response = tk.Label(
             bottom, text="",
@@ -154,16 +175,49 @@ class JarvisWindow(_DND_BASE):
         )
         self._lbl_status.pack(pady=(0, 4))
 
-        # ── Botón pausa (pill canvas) ──────────────────────────────────────
-        _PW, _PH = 170, 36
-        self._pill_w, self._pill_h = _PW, _PH
-        self._pill = tk.Canvas(
-            bottom, width=_PW, height=_PH,
+        # ── Cuadro de diálogo de texto (oculto por defecto) ───────────────
+        self._text_input_frame = tk.Frame(bottom, bg="black")
+        self._text_entry = tk.Entry(
+            self._text_input_frame,
+            bg="#1C1C1E", fg="#EBEBF5", insertbackground="#1A6FFF",
+            font=("Helvetica Neue", 13), relief="flat", bd=0,
+        )
+        self._text_entry.pack(side="left", padx=(12, 8), ipady=6,
+                              expand=True, fill="x")
+        self._text_entry.bind("<Return>", lambda _e: self._send_text_input())
+        _sPW, _sPH = 80, 34
+        self._send_pill = tk.Canvas(
+            self._text_input_frame, width=_sPW, height=_sPH,
             bg="black", highlightthickness=0, cursor="hand2",
         )
-        self._pill.pack(pady=(0, 8))
+        self._send_pill.pack(side="left", padx=(0, 12))
+        self._send_pill.bind("<Button-1>", lambda _e: self._send_text_input())
+        self._draw_send_pill()
+
+        # ── Fila de botones: pausa ────────────────────────────────────────
+        btns_row = tk.Frame(bottom, bg="black")
+        btns_row.pack(pady=(0, 8))
+        self._btns_row = btns_row
+
+        _PW, _PH = 160, 36
+        self._pill_w, self._pill_h = _PW, _PH
+        self._pill = tk.Canvas(
+            btns_row, width=_PW, height=_PH,
+            bg="black", highlightthickness=0, cursor="hand2",
+        )
+        self._pill.pack(side="left")
         self._pill.bind("<Button-1>", lambda _e: self._toggle_pause())
         self._draw_pill()
+
+        # ── Botón de ajustes en esquina superior izquierda ────────────────
+        _GPW, _GPH = 36, 36
+        self._gear_pill = tk.Canvas(
+            self, width=_GPW, height=_GPH,
+            bg="black", highlightthickness=0, cursor="hand2",
+        )
+        self._gear_pill.place(x=10, y=10)
+        self._gear_pill.bind("<Button-1>", lambda _e: self._open_settings())
+        self._draw_gear_pill()
 
         # Interrumpir habla con clic en canvas principal o Escape
         self._canvas.bind("<Button-1>", self._canvas_click)
@@ -185,7 +239,8 @@ class JarvisWindow(_DND_BASE):
         c    = self._canvas
         t    = time.time() - self._t0
         col  = _STATE_COLOR[self._state]
-        W, H = _W, self._canvas_h
+        W = self._canvas.winfo_width()  or (_WIDGET_W if self._widget_mode else _W)
+        H = self._canvas.winfo_height() or (_WIDGET_H if self._widget_mode else self._canvas_h)
         cx, cy = W // 2, H // 2
 
         c.delete("all")
@@ -295,6 +350,19 @@ class JarvisWindow(_DND_BASE):
             if na > 0.04:
                 c.create_oval(sx - nr, sy - nr, sx + nr, sy + nr,
                               fill=self._blend(col, na), outline="")
+
+        # Modo widget: solo partículas + botón de restaurar (sin overlays)
+        if self._widget_mode:
+            rx, ry = W - 14, 14
+            rr     = 11
+            rcol   = self._blend(col, 0.65)
+            c.create_oval(rx - rr, ry - rr, rx + rr, ry + rr,
+                          fill="#141414", outline=rcol, width=1)
+            c.create_text(rx, ry, text="⊞", fill=rcol,
+                          font=("Helvetica Neue", 11))
+            self._widget_restore_rect = (rx - rr, ry - rr, rx + rr, ry + rr)
+            return
+
         # ── Preview imagen arrastrada ─────────────────────────────────────────
         if self._pending_image_tk:
             iw = self._pending_image_tk.width()
@@ -592,6 +660,15 @@ class JarvisWindow(_DND_BASE):
     # ── Imagen ─────────────────────────────────────────────────────────────────
     def _canvas_click(self, event) -> None:
         """Clic en canvas: cierra preview de imagen o interrumpe habla."""
+        if self._widget_mode:
+            # Registrar origen del arrastre y verificar botón restaurar
+            self._drag_x = event.x_root
+            self._drag_y = event.y_root
+            if self._widget_restore_rect:
+                x1, y1, x2, y2 = self._widget_restore_rect
+                if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                    self.after(0, self._exit_widget_mode)
+            return
         if self._img_close_rect:
             x1, y1, x2, y2 = self._img_close_rect
             if x1 <= event.x <= x2 and y1 <= event.y <= y2:
@@ -943,7 +1020,7 @@ class JarvisWindow(_DND_BASE):
                 self._tts_tmpfile = f.name
 
             async def _gen():
-                comm = edge_tts.Communicate(text, "es-MX-JorgeNeural")
+                comm = edge_tts.Communicate(text, self._selected_voice)
                 await comm.save(self._tts_tmpfile)
 
             asyncio.run(_gen())
@@ -1008,6 +1085,302 @@ class JarvisWindow(_DND_BASE):
         c.create_line(R, H-1, W - R, H-1, fill=bdr, width=1)     # borde inferior
         c.create_text(W // 2, H // 2, text=icon, fill=fg,
                       font=("Helvetica Neue", 12))
+
+    def _draw_gear_pill(self) -> None:
+        """Redibuja el botón de ajustes (ícono ⚙) como círculo."""
+        c = self._gear_pill
+        c.delete("all")
+        W, H = 36, 36
+        bg  = "#1C1C1E"
+        bdr = "#48484A"
+        c.create_oval(1, 1, W - 1, H - 1, fill=bg, outline=bdr)
+        c.create_text(W // 2, H // 2, text="⚙", fill="#EBEBF5",
+                      font=("Helvetica Neue", 16))
+
+    def _draw_send_pill(self) -> None:
+        """Redibuja el botón enviar del cuadro de texto."""
+        c = self._send_pill
+        c.delete("all")
+        W, H = 80, 34
+        R    = H // 2
+        bg   = "#1A6FFF"
+        bdr  = "#2A7FFF"
+        c.create_oval(0, 0, H, H, fill=bg, outline=bdr)
+        c.create_oval(W - H, 0, W - 1, H, fill=bg, outline=bdr)
+        c.create_rectangle(R, 1, W - R, H - 1, fill=bg, outline="")
+        c.create_line(R, 0, W - R, 0, fill=bdr, width=1)
+        c.create_line(R, H - 1, W - R, H - 1, fill=bdr, width=1)
+        c.create_text(W // 2, H // 2, text="ENVIAR", fill="white",
+                      font=("Helvetica Neue", 11, "bold"))
+
+    # ── Modo texto ──────────────────────────────────────────────────────────
+    def _set_text_mode(self, enabled: bool) -> None:
+        """Muestra u oculta el cuadro de diálogo de texto."""
+        self._text_mode = enabled
+        if enabled:
+            self._text_input_frame.pack(before=self._btns_row,
+                                        fill="x", pady=(4, 2))
+            if not self._widget_mode:
+                x, y = self.winfo_x(), self.winfo_y()
+                self.geometry(f"{_W}x{_H + 50}+{x}+{y}")
+            self._text_entry.focus_set()
+        else:
+            self._text_input_frame.pack_forget()
+            if not self._widget_mode:
+                x, y = self.winfo_x(), self.winfo_y()
+                self.geometry(f"{_W}x{_H}+{x}+{y}")
+
+    def _send_text_input(self) -> None:
+        """Envía el texto escrito por el usuario al agente."""
+        text = self._text_entry.get().strip()
+        if not text:
+            return
+        self._text_entry.delete(0, "end")
+        self._show_response(f"Tú: {text}")
+        threading.Thread(
+            target=self._process_text_command, args=(text,), daemon=True
+        ).start()
+
+    def _process_text_command(self, command: str) -> None:
+        """Procesa un comando enviado por texto (hilo secundario)."""
+        self._transition(_THINKING)
+        try:
+            if self._agent:
+                reply = self._agent.send_message(command)
+            else:
+                reply = "[Modo demo]"
+        except Exception as exc:
+            reply = f"[Error: {exc}]"
+        if self._agent and self._agent.last_saved_path:
+            _saved = self._agent.last_saved_path
+            self._agent.last_saved_path = None
+            self.after(0, lambda p=_saved: self._show_doc_preview(p))
+        self._show_response(f"Jarvis: {reply}")
+        self._transition(_SPEAKING)
+        self._speak(reply)
+        if self._state == _SPEAKING:
+            self._transition(_IDLE)
+
+    # ── Panel de ajustes ────────────────────────────────────────────────────
+    def _open_settings(self) -> None:
+        """Abre el panel flotante de ajustes."""
+        if self._settings_win and self._settings_win.winfo_exists():
+            self._settings_win.lift()
+            return
+
+        _SW, _SH = 400, 360
+        win = tk.Toplevel(self)
+        win.title("Ajustes · Jarvis")
+        win.configure(bg="#0C0C0C")
+        win.resizable(False, False)
+        win.transient(self)
+        wx = self.winfo_x() + (_W - _SW) // 2
+        wy = self.winfo_y() + (_H - _SH) // 2
+        win.geometry(f"{_SW}x{_SH}+{wx}+{wy}")
+        self._settings_win = win
+
+        col = _STATE_COLOR[self._state]
+
+        # Marco HUD decorativo
+        frame_c = tk.Canvas(win, width=_SW, height=_SH,
+                            bg="#0C0C0C", highlightthickness=0)
+        frame_c.place(x=0, y=0)
+        pad = 6
+        for g, a in ((4, 0.06), (2, 0.14), (1, 0.30)):
+            frame_c.create_rectangle(
+                pad - g, pad - g, _SW - pad + g, _SH - pad + g,
+                outline=self._blend(col, a), width=1, fill="",
+            )
+        clen = 16
+        for sx, sy, dx, dy in (
+            (pad, pad, +1, +1), (_SW - pad, pad, -1, +1),
+            (pad, _SH - pad, +1, -1), (_SW - pad, _SH - pad, -1, -1),
+        ):
+            frame_c.create_line(sx, sy, sx + dx * clen, sy,
+                                fill=self._blend(col, 0.90), width=2)
+            frame_c.create_line(sx, sy, sx, sy + dy * clen,
+                                fill=self._blend(col, 0.90), width=2)
+
+        # ── Título ──────────────────────────────────────────────────────────
+        tk.Label(win, text="⚙  AJUSTES", fg=self._blend(col, 0.90),
+                 bg="#0C0C0C", font=("Helvetica Neue", 14, "bold")
+                 ).place(x=22, y=18)
+
+        def _sep(y: int) -> None:
+            sc = tk.Canvas(win, width=_SW - 44, height=1,
+                           bg="#0C0C0C", highlightthickness=0)
+            sc.place(x=22, y=y)
+            sc.create_line(0, 0, _SW - 44, 0, fill=self._blend(col, 0.22))
+        _sep(50)
+
+        # ── Voz del agente ───────────────────────────────────────────────
+        tk.Label(win, text="VOZ DEL AGENTE", fg=self._blend(col, 0.55),
+                 bg="#0C0C0C", font=("Helvetica Neue", 9, "bold")
+                 ).place(x=22, y=62)
+
+        voice_names  = [n for n, _ in _EDGE_VOICES]
+        voice_values = [v for _, v in _EDGE_VOICES]
+        cur_idx = next(
+            (i for i, v in enumerate(voice_values) if v == self._selected_voice), 0
+        )
+        voice_var = tk.StringVar(win, value=voice_names[cur_idx])
+        vm = tk.OptionMenu(win, voice_var, *voice_names)
+        vm.configure(
+            bg="#1C1C1E", fg="#EBEBF5",
+            activebackground="#2C2C2E", activeforeground="#EBEBF5",
+            font=("Helvetica Neue", 12), relief="flat", bd=0,
+            highlightthickness=1, highlightbackground=self._blend(col, 0.35),
+            width=30,
+        )
+        vm["menu"].configure(
+            bg="#1C1C1E", fg="#EBEBF5",
+            activebackground="#2C2C2E", activeforeground="#EBEBF5",
+            font=("Helvetica Neue", 12),
+        )
+        vm.place(x=20, y=80)
+        _sep(152)
+
+        # ── Comunicación ────────────────────────────────────────────────
+        tk.Label(win, text="COMUNICACIÓN", fg=self._blend(col, 0.55),
+                 bg="#0C0C0C", font=("Helvetica Neue", 9, "bold")
+                 ).place(x=22, y=164)
+
+        text_var = tk.BooleanVar(win, value=self._text_mode)
+        chk_bg   = "#1C1C1E"
+        chk_frame = tk.Frame(win, bg=chk_bg)
+        chk_frame.place(x=20, y=182, width=_SW - 40, height=40)
+        tk.Checkbutton(
+            chk_frame,
+            text="  Habilitar cuadro de diálogo de texto",
+            variable=text_var,
+            bg=chk_bg, fg="#EBEBF5",
+            activebackground="#2C2C2E", activeforeground="#EBEBF5",
+            selectcolor="#0C0C0C",
+            font=("Helvetica Neue", 12), relief="flat", bd=0,
+        ).pack(pady=6, padx=8, anchor="w")
+        _sep(240)
+
+        # ── Vista ───────────────────────────────────────────────────────
+        tk.Label(win, text="VISTA", fg=self._blend(col, 0.55),
+                 bg="#0C0C0C", font=("Helvetica Neue", 9, "bold")
+                 ).place(x=22, y=252)
+
+        _BW, _BH = _SW - 40, 38
+        widget_btn = tk.Canvas(win, width=_BW, height=_BH,
+                               bg="#0C0C0C", highlightthickness=0,
+                               cursor="hand2")
+        widget_btn.place(x=20, y=270)
+
+        def _draw_wb() -> None:
+            widget_btn.delete("all")
+            R  = _BH // 2
+            bg = "#1C1C1E"
+            bd = self._blend(col, 0.50)
+            widget_btn.create_oval(0, 0, _BH, _BH, fill=bg, outline=bd)
+            widget_btn.create_oval(_BW - _BH, 0, _BW - 1, _BH, fill=bg, outline=bd)
+            widget_btn.create_rectangle(R, 1, _BW - R, _BH - 1, fill=bg, outline="")
+            widget_btn.create_line(R, 0, _BW - R, 0, fill=bd, width=1)
+            widget_btn.create_line(R, _BH - 1, _BW - R, _BH - 1, fill=bd, width=1)
+            lbl = ("✦  Salir del modo widget"
+                   if self._widget_mode else "⊟  Minimizar a widget")
+            widget_btn.create_text(_BW // 2, _BH // 2, text=lbl,
+                                   fill=self._blend(col, 0.90),
+                                   font=("Helvetica Neue", 12))
+        _draw_wb()
+
+        def _on_widget_btn(_e=None) -> None:
+            win.destroy()
+            self._settings_win = None
+            if self._widget_mode:
+                self._exit_widget_mode()
+            else:
+                self._enter_widget_mode()
+
+        widget_btn.bind("<Button-1>", _on_widget_btn)
+
+        # ── Botón APLICAR ───────────────────────────────────────────────
+        _ABW, _ABH = 110, 34
+        apply_btn = tk.Canvas(win, width=_ABW, height=_ABH,
+                              bg="#0C0C0C", highlightthickness=0,
+                              cursor="hand2")
+        apply_btn.place(x=_SW - _ABW - 18, y=_SH - _ABH - 16)
+        R  = _ABH // 2
+        bg = "#1C1C1E"
+        bd = self._blend(col, 0.55)
+        apply_btn.create_oval(0, 0, _ABH, _ABH, fill=bg, outline=bd)
+        apply_btn.create_oval(_ABW - _ABH, 0, _ABW - 1, _ABH, fill=bg, outline=bd)
+        apply_btn.create_rectangle(R, 1, _ABW - R, _ABH - 1, fill=bg, outline="")
+        apply_btn.create_line(R, 0, _ABW - R, 0, fill=bd, width=1)
+        apply_btn.create_line(R, _ABH - 1, _ABW - R, _ABH - 1, fill=bd, width=1)
+        apply_btn.create_text(_ABW // 2, _ABH // 2, text="APLICAR",
+                              fill=self._blend(col, 0.90),
+                              font=("Helvetica Neue", 11, "bold"))
+
+        def _apply(_e=None) -> None:
+            # Aplicar voz seleccionada
+            sel = voice_var.get()
+            for n, v in _EDGE_VOICES:
+                if n == sel:
+                    self._selected_voice = v
+                    break
+            # Aplicar modo texto
+            new_tm = text_var.get()
+            if new_tm != self._text_mode:
+                self._set_text_mode(new_tm)
+            win.destroy()
+            self._settings_win = None
+
+        apply_btn.bind("<Button-1>", _apply)
+        win.bind("<Return>", _apply)
+
+    # ── Modo widget ──────────────────────────────────────────────────────────
+    def _enter_widget_mode(self) -> None:
+        """Minimiza la ventana a un widget compacto mostrando solo partículas."""
+        if self._widget_mode:
+            return
+        self._widget_mode    = True
+        self._restore_geometry = self.geometry()
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        wx = sw - _WIDGET_W - 24
+        wy = sh - _WIDGET_H - 60
+        self._bottom_frame.pack_forget()
+        self.overrideredirect(True)
+        self.attributes("-topmost", True)
+        self.geometry(f"{_WIDGET_W}x{_WIDGET_H}+{wx}+{wy}")
+        self._canvas.bind("<B1-Motion>", self._widget_drag_move)
+        self.lift()
+        self.focus_force()
+
+    def _exit_widget_mode(self) -> None:
+        """Restaura la ventana completa desde el modo widget."""
+        if not self._widget_mode:
+            return
+        self._widget_mode = False
+        self._canvas.unbind("<B1-Motion>")
+        self._widget_restore_rect = None
+        self.overrideredirect(False)
+        self.attributes("-topmost", False)
+        self._bottom_frame.pack(side="bottom", fill="x")
+        # Restaurar geometría y ajustar alto si el modo texto está activo
+        geo = self._restore_geometry
+        wh, *pos_parts = geo.replace('-', '+-').split('+')
+        pos = '+' + '+'.join(p.replace('+-', '-') for p in pos_parts if p) if pos_parts else ''
+        w_str, h_str = wh.split('x')
+        h = _H + 50 if self._text_mode else _H
+        self.geometry(f"{w_str}x{h}{pos}")
+        self.lift()
+        self.focus_force()
+
+    def _widget_drag_move(self, event) -> None:
+        """Arrastra el widget por la pantalla (coordenadas absolutas de pantalla)."""
+        dx = event.x_root - self._drag_x
+        dy = event.y_root - self._drag_y
+        self._drag_x = event.x_root   # actualizar para el siguiente evento
+        self._drag_y = event.y_root
+        x  = self.winfo_x() + dx
+        y  = self.winfo_y() + dy
+        self.geometry(f"+{x}+{y}")
 
     # ── Helpers thread-safe ──────────────────────────────────────────────
     def _transition(self, state: str) -> None:
