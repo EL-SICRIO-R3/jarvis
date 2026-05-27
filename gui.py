@@ -194,7 +194,7 @@ class JarvisWindow(_DND_BASE):
         self._send_pill.bind("<Button-1>", lambda _e: self._send_text_input())
         self._draw_send_pill()
 
-        # ── Fila de botones: pausa + ajustes ──────────────────────────────
+        # ── Fila de botones: pausa ────────────────────────────────────────
         btns_row = tk.Frame(bottom, bg="black")
         btns_row.pack(pady=(0, 8))
         self._btns_row = btns_row
@@ -205,16 +205,17 @@ class JarvisWindow(_DND_BASE):
             btns_row, width=_PW, height=_PH,
             bg="black", highlightthickness=0, cursor="hand2",
         )
-        self._pill.pack(side="left", padx=(0, 10))
+        self._pill.pack(side="left")
         self._pill.bind("<Button-1>", lambda _e: self._toggle_pause())
         self._draw_pill()
 
-        _GPW, _GPH = 44, 36
+        # ── Botón de ajustes en esquina superior izquierda ────────────────
+        _GPW, _GPH = 36, 36
         self._gear_pill = tk.Canvas(
-            btns_row, width=_GPW, height=_GPH,
+            self, width=_GPW, height=_GPH,
             bg="black", highlightthickness=0, cursor="hand2",
         )
-        self._gear_pill.pack(side="left")
+        self._gear_pill.place(x=10, y=10)
         self._gear_pill.bind("<Button-1>", lambda _e: self._open_settings())
         self._draw_gear_pill()
 
@@ -1086,18 +1087,13 @@ class JarvisWindow(_DND_BASE):
                       font=("Helvetica Neue", 12))
 
     def _draw_gear_pill(self) -> None:
-        """Redibuja el botón de ajustes (ícono ⚙)."""
+        """Redibuja el botón de ajustes (ícono ⚙) como círculo."""
         c = self._gear_pill
         c.delete("all")
-        W, H = 44, 36
-        R    = H // 2
-        bg   = "#1C1C1E"
-        bdr  = "#48484A"
-        c.create_oval(0, 0, H, H, fill=bg, outline=bdr)
-        c.create_oval(W - H, 0, W - 1, H, fill=bg, outline=bdr)
-        c.create_rectangle(R, 1, W - R, H - 1, fill=bg, outline="")
-        c.create_line(R, 0, W - R, 0, fill=bdr, width=1)
-        c.create_line(R, H - 1, W - R, H - 1, fill=bdr, width=1)
+        W, H = 36, 36
+        bg  = "#1C1C1E"
+        bdr = "#48484A"
+        c.create_oval(1, 1, W - 1, H - 1, fill=bg, outline=bdr)
         c.create_text(W // 2, H // 2, text="⚙", fill="#EBEBF5",
                       font=("Helvetica Neue", 16))
 
@@ -1124,9 +1120,15 @@ class JarvisWindow(_DND_BASE):
         if enabled:
             self._text_input_frame.pack(before=self._btns_row,
                                         fill="x", pady=(4, 2))
+            if not self._widget_mode:
+                x, y = self.winfo_x(), self.winfo_y()
+                self.geometry(f"{_W}x{_H + 50}+{x}+{y}")
             self._text_entry.focus_set()
         else:
             self._text_input_frame.pack_forget()
+            if not self._widget_mode:
+                x, y = self.winfo_x(), self.winfo_y()
+                self.geometry(f"{_W}x{_H}+{x}+{y}")
 
     def _send_text_input(self) -> None:
         """Envía el texto escrito por el usuario al agente."""
@@ -1360,7 +1362,13 @@ class JarvisWindow(_DND_BASE):
         self.overrideredirect(False)
         self.attributes("-topmost", False)
         self._bottom_frame.pack(side="bottom", fill="x")
-        self.geometry(self._restore_geometry)
+        # Restaurar geometía y ajustar alto si el modo texto está activo
+        geo = self._restore_geometry
+        wh, *pos_parts = geo.replace('-', '+-').split('+')
+        pos = '+' + '+'.join(p.replace('+-', '-') for p in pos_parts if p) if pos_parts else ''
+        w_str, h_str = wh.split('x')
+        h = _H + 50 if self._text_mode else _H
+        self.geometry(f"{w_str}x{h}{pos}")
         self.lift()
         self.focus_force()
 
