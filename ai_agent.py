@@ -494,8 +494,7 @@ class JarvisAgent:
         self.last_generated_video_path = None
         if self._provider == "gemini":
             return self._send_gemini_with_image(user_message, image_path)
-        # OpenAI vision fallback — si no hay soporte, degradar a texto
-        return self._send_openai(f"[El usuario adjuntó una imagen: {image_path}]\n{user_message}")
+        return self._send_openai_with_image(user_message, image_path)
 
     # ------------------------------------------------------------------
     # Implementación por proveedor
@@ -689,6 +688,97 @@ class JarvisAgent:
                         "text": "Imagen(es) capturada(s). Descríbelas al usuario en detalle.",
                     })
                     messages.append({"role": "user", "content": vision_content})
+                self.last_captured_image_path = captured_image_paths[-1]
+
+    def _send_openai_with_image(self, user_message: str, image_path: str) -> str:
+        """Envía texto + imagen a OpenAI (visión multimodal con gpt-4o-mini)."""
+        import base64
+        import json
+
+        ext = os.path.splitext(image_path)[1].lower().lstrip(".")
+        if ext == "jpg":
+            ext = "jpeg"
+        try:
+            with open(image_path, "rb") as _f:
+                b64 = base64.b64encode(_f.read()).decode()
+        except Exception as exc:
+            return f"[No se pudo leer la imagen: {exc}]"
+
+        vision_message = {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/{ext};base64,{b64}"},
+                },
+                {"type": "text", "text": user_message},
+            ],
+        }
+
+        # Guardamos en historial como texto para no acumular base64 en turnos futuros
+        self._history.append({"role": "user", "content": user_message})
+
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + self._history[:-1] + [vision_message]
+
+        # Ciclo de function calling (igual que _send_openai)
+        while True:
+            response = self._client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                tools=OPENAI_TOOLS,
+                tool_choice="auto",
+            )
+
+            message = response.choices[0].message
+
+            if not message.tool_calls:
+                assistant_text = message.content or ""
+                self._history.append({"role": "assistant", "content": assistant_text})
+                return assistant_text
+
+            messages.append(message)
+
+            captured_image_paths: list[str] = []
+            for tool_call in message.tool_calls:
+                try:
+                    args = json.loads(tool_call.function.arguments)
+                except json.JSONDecodeError:
+                    args = {}
+
+                resultado = self._execute_tool(tool_call.function.name, args)
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": resultado,
+                    }
+                )
+                if tool_call.function.name in self._VISION_CAPTURE_TOOLS:
+                    _path = resultado.strip()
+                    if not _path.startswith("[") and os.path.isfile(_path):
+                        captured_image_paths.append(_path)
+
+            if captured_image_paths:
+                cap_content: list = []
+                for _p in captured_image_paths:
+                    _ext = os.path.splitext(_p)[1].lower().lstrip(".")
+                    if _ext == "jpg":
+                        _ext = "jpeg"
+                    try:
+                        with open(_p, "rb") as _f:
+                            _b64 = base64.b64encode(_f.read()).decode()
+                        cap_content.append({
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/{_ext};base64,{_b64}"},
+                        })
+                    except Exception:
+                        pass
+                if cap_content:
+                    cap_content.append({
+                        "type": "text",
+                        "text": "Imagen(es) capturada(s). Descríbelas al usuario en detalle.",
+                    })
+                    messages.append({"role": "user", "content": cap_content})
                 self.last_captured_image_path = captured_image_paths[-1]
 
     # ------------------------------------------------------------------
