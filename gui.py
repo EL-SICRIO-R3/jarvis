@@ -15,6 +15,9 @@ import threading
 import time
 import os
 import tkinter as tk
+from dotenv import load_dotenv
+
+load_dotenv()
 
 try:
     from tkinterdnd2 import DND_FILES as _DND_FILES, TkinterDnD as _TkDnD
@@ -70,6 +73,21 @@ _EDGE_VOICES = [                       # voces neural edge-tts (español)
     ("Tomás · Argentina (Neural)", "es-AR-TomasNeural"),
 ]
 
+# Voces ElevenLabs predefinidas (id obtenido de la API de ElevenLabs)
+_ELEVEN_VOICES = [
+    ("Adam · (ElevenLabs)", "pNInz6obpgDQGcFmaJgB"),
+    ("Antoni · (ElevenLabs)", "ErXwobaYiN019PkySvjV"),
+    ("Arnold · (ElevenLabs)", "VR6AewLTigWG4xSOukaG"),
+    ("Bella · (ElevenLabs)", "EXAVITQu4vr4xnSDxMaL"),
+    ("Domi · (ElevenLabs)", "AZnzlk1XvdvUeBnXmlld"),
+    ("Elli · (ElevenLabs)", "MF3mGyEYCl7XYWbV9V6O"),
+    ("Josh · (ElevenLabs)", "TxGEqnHWrfWFTfGW9XjX"),
+    ("Rachel · (ElevenLabs)", "21m00Tcm4TlvDq8ikWAM"),
+    ("Sam · (ElevenLabs)", "yoZ06aMxZJJ28mfd3POQ"),
+]
+
+_ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY", "")
+
 
 class _Particle:
     """Punto en la superficie de una esfera unitaria — distribucion Fibonacci."""
@@ -118,7 +136,10 @@ class JarvisWindow(_DND_BASE):
         self._capture_preview_rect         = None
 
         # ── Ajustes ──────────────────────────────────────────────────────────
-        self._selected_voice: str = "es-MX-JorgeNeural"
+        # Si hay clave de ElevenLabs, usar la primera voz de ElevenLabs por defecto
+        self._selected_voice: str = (
+            _ELEVEN_VOICES[0][1] if _ELEVENLABS_API_KEY else "es-MX-JorgeNeural"
+        )
         self._text_mode: bool     = False
         self._widget_mode: bool   = False
         self._restore_geometry: str = f"{_W}x{_H}"
@@ -987,7 +1008,10 @@ class JarvisWindow(_DND_BASE):
 
     def _speak(self, text: str) -> None:
         chunk = text[:400]
-        if _SO == "darwin":
+        # Prioridad: ElevenLabs (si hay clave) → edge-tts (macOS) → pyttsx3
+        if _ELEVENLABS_API_KEY and self._selected_voice in {v for _, v in _ELEVEN_VOICES}:
+            self._speak_elevenlabs(chunk)
+        elif _SO == "darwin":
             self._speak_neural(chunk)
         else:
             try:
@@ -1000,10 +1024,72 @@ class JarvisWindow(_DND_BASE):
             except Exception:
                 pass
 
+    def _speak_elevenlabs(self, text: str) -> None:
+        """TTS ultra-natural con ElevenLabs API. Fallback a edge-tts / say."""
+        import tempfile
+        try:
+            from elevenlabs.client import ElevenLabs
+            from elevenlabs import VoiceSettings
+        except ImportError:
+            self._speak_neural(text)
+            return
+
+        try:
+            client = ElevenLabs(api_key=_ELEVENLABS_API_KEY)
+            audio_iter = client.text_to_speech.convert(
+                voice_id=self._selected_voice,
+                text=text,
+                model_id="eleven_multilingual_v2",
+                voice_settings=VoiceSettings(
+                    stability=0.45,
+                    similarity_boost=0.80,
+                    style=0.30,
+                    use_speaker_boost=True,
+                ),
+            )
+            # Volcar el iterador a un archivo MP3 temporal
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+                self._tts_tmpfile = f.name
+                for chunk in audio_iter:
+                    f.write(chunk)
+        except Exception:
+            self._tts_tmpfile = None
+            # Fallback a edge-tts o say si ElevenLabs falla
+            self._speak_neural(text)
+            return
+
+        self._play_tmpfile()
+
+    def _play_tmpfile(self) -> None:
+        """Reproduce self._tts_tmpfile con el reproductor disponible."""
+        if not self._tts_tmpfile or not os.path.exists(self._tts_tmpfile):
+            return
+        # afplay en macOS; ffplay/aplay como fallback en Linux
+        if _SO == "darwin":
+            player = ["afplay", self._tts_tmpfile]
+        else:
+            # Intentar ffplay o aplay (sin ventana de video)
+            import shutil
+            if shutil.which("ffplay"):
+                player = ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet",
+                          self._tts_tmpfile]
+            elif shutil.which("aplay"):
+                player = ["aplay", self._tts_tmpfile]
+            else:
+                player = None
+        if player:
+            self._say_proc = subprocess.Popen(player)
+            self._say_proc.wait()
+            self._say_proc = None
+        try:
+            os.unlink(self._tts_tmpfile)
+        except Exception:
+            pass
+        self._tts_tmpfile = None
+
     def _speak_neural(self, text: str) -> None:
         """TTS con edge-tts (voz neural Microsoft) + afplay. Fallback a say."""
         import asyncio
-        import os
         import tempfile
         try:
             import truststore
@@ -1032,16 +1118,7 @@ class JarvisWindow(_DND_BASE):
             self._tts_tmpfile = None
             return
 
-        # Reproducir con afplay (interruptible vía _interrupt)
-        if self._tts_tmpfile and os.path.exists(self._tts_tmpfile):
-            self._say_proc = subprocess.Popen(["afplay", self._tts_tmpfile])
-            self._say_proc.wait()
-            self._say_proc = None
-            try:
-                os.unlink(self._tts_tmpfile)
-            except Exception:
-                pass
-            self._tts_tmpfile = None
+        self._play_tmpfile()
 
     def _toggle_pause(self) -> None:
         """Pausa o reanuda la conversación."""
@@ -1222,12 +1299,19 @@ class JarvisWindow(_DND_BASE):
         _sep(50)
 
         # ── Voz del agente ───────────────────────────────────────────────
-        tk.Label(win, text="VOZ DEL AGENTE", fg=self._blend(col, 0.55),
+        # Usar voces ElevenLabs si hay clave; si no, Edge-TTS
+        if _ELEVENLABS_API_KEY:
+            _active_voices = _ELEVEN_VOICES
+            voice_label = "VOZ DEL AGENTE  (ElevenLabs ✦)"
+        else:
+            _active_voices = _EDGE_VOICES
+            voice_label = "VOZ DEL AGENTE"
+        tk.Label(win, text=voice_label, fg=self._blend(col, 0.55),
                  bg="#0C0C0C", font=("Helvetica Neue", 9, "bold")
                  ).place(x=22, y=62)
 
-        voice_names  = [n for n, _ in _EDGE_VOICES]
-        voice_values = [v for _, v in _EDGE_VOICES]
+        voice_names  = [n for n, _ in _active_voices]
+        voice_values = [v for _, v in _active_voices]
         cur_idx = next(
             (i for i, v in enumerate(voice_values) if v == self._selected_voice), 0
         )
@@ -1325,9 +1409,9 @@ class JarvisWindow(_DND_BASE):
                               font=("Helvetica Neue", 11, "bold"))
 
         def _apply(_e=None) -> None:
-            # Aplicar voz seleccionada
+            # Aplicar voz seleccionada (buscar en la lista activa)
             sel = voice_var.get()
-            for n, v in _EDGE_VOICES:
+            for n, v in _active_voices:
                 if n == sel:
                     self._selected_voice = v
                     break
