@@ -50,7 +50,7 @@ def _img_dir() -> Path:
 # ---------------------------------------------------------------------------
 
 def get_clipboard_content() -> str:
-    """Lee y retorna el texto actual del portapapeles del sistema."""
+    """Retorna el texto actual del portapapeles."""
     try:
         import pyperclip  # type: ignore
         text = pyperclip.paste()
@@ -62,7 +62,7 @@ def get_clipboard_content() -> str:
 
 
 def get_os_info() -> str:
-    """Devuelve un resumen detallado del sistema operativo y el hardware del host."""
+    """Retorna resumen del SO, hardware y arquitectura del host."""
     fields = {
         "OS": platform.platform(),
         "System": platform.system(),
@@ -78,12 +78,11 @@ def get_os_info() -> str:
 
 def run_terminal_command(command_name: str, argument: str = "") -> str:
     """
-    Ejecuta un comando de terminal de una lista de permitidos (solo lectura/informativos)
-    y devuelve su salida.
+    Ejecuta un comando de solo lectura y retorna su salida.
 
     Args:
-        command_name: Clave del comando a ejecutar (e.g. 'ls', 'df', 'pip', 'ps').
-        argument: Argumento de ruta opcional (solo para 'ls' y 'dir').
+        command_name: Clave del comando: 'ls', 'df', 'pip', 'ps', 'whoami', etc.
+        argument: Ruta opcional (solo 'ls' y 'dir').
     """
     _POSIX: dict[str, list[str]] = {
         "python": ["python", "--version"],
@@ -138,10 +137,10 @@ def run_terminal_command(command_name: str, argument: str = "") -> str:
 
 def open_browser(url: str) -> str:
     """
-    Abre una URL en el navegador predeterminado del sistema.
+    Abre una URL en el navegador predeterminado.
 
     Args:
-        url: La URL a abrir. Si no tiene esquema, se añade https:// automáticamente.
+        url: URL a abrir (se añade https:// si falta esquema).
     """
     import webbrowser
 
@@ -159,11 +158,11 @@ def open_browser(url: str) -> str:
 
 def extract_text_from_url(url: str, max_chars: int = 8000) -> str:
     """
-    Descarga una página web y devuelve su texto plano limpio (scripts y estilos eliminados).
+    Descarga una URL y retorna su texto plano limpio.
 
     Args:
-        url: URL de la página a extraer.
-        max_chars: Límite de caracteres del texto devuelto (por defecto 8000).
+        url: URL de la página.
+        max_chars: Límite de caracteres (por defecto 8000).
     """
     try:
         import requests  # type: ignore
@@ -205,11 +204,11 @@ def extract_text_from_url(url: str, max_chars: int = 8000) -> str:
 
 def read_file(file_path: str, encoding: str = "utf-8") -> str:
     """
-    Lee y devuelve el contenido completo de un archivo de texto o PDF.
+    Retorna el contenido de un archivo de texto o PDF.
 
     Args:
-        file_path: Ruta al archivo. Acepta ~ (tilde expansion).
-        encoding: Codificación para archivos de texto plano (por defecto utf-8).
+        file_path: Ruta al archivo; acepta ~.
+        encoding: Codificación del archivo de texto (por defecto utf-8).
     """
     path = os.path.realpath(os.path.expanduser(file_path))
     if not os.path.exists(path):
@@ -241,11 +240,11 @@ def read_file(file_path: str, encoding: str = "utf-8") -> str:
 
 def create_file(file_path: str, content: str, overwrite: bool = False) -> str:
     """
-    Crea un archivo de texto UTF-8 en la ruta especificada.
+    Crea o sobreescribe un archivo de texto UTF-8.
 
     Args:
-        file_path: Ruta del archivo a crear. Acepta ~.
-        content: Contenido a escribir en el archivo.
+        file_path: Ruta del archivo; acepta ~.
+        content: Contenido a escribir.
         overwrite: Si True, reemplaza el archivo si ya existe.
     """
     path = os.path.realpath(os.path.expanduser(file_path))
@@ -266,11 +265,11 @@ def create_file(file_path: str, content: str, overwrite: bool = False) -> str:
 
 def list_directory(directory_path: str = ".", show_hidden: bool = False) -> str:
     """
-    Lista los archivos y subdirectorios de una ruta con sus tamaños.
+    Lista archivos y subdirectorios con sus tamaños.
 
     Args:
-        directory_path: Ruta del directorio a listar (por defecto el directorio actual).
-        show_hidden: Si True, incluye archivos y carpetas ocultos.
+        directory_path: Ruta a listar (por defecto directorio actual).
+        show_hidden: Si True, incluye entradas ocultas.
     """
     path = os.path.realpath(os.path.expanduser(directory_path))
     if not os.path.exists(path):
@@ -311,11 +310,7 @@ def list_directory(directory_path: str = ".", show_hidden: bool = False) -> str:
 # ---------------------------------------------------------------------------
 
 def capturar_foto_webcam() -> str:
-    """
-    Captura una foto con la webcam principal del sistema y la guarda como JPEG
-    en la carpeta ``ia-tools/img`` del proyecto.
-    Retorna la ruta absoluta del archivo generado o un mensaje de error.
-    """
+    """Captura foto con la webcam y retorna la ruta del JPEG guardado."""
     try:
         import cv2  # type: ignore
     except ImportError:
@@ -338,11 +333,7 @@ def capturar_foto_webcam() -> str:
 
 
 def tomar_captura_pantalla() -> str:
-    """
-    Toma un screenshot de la pantalla principal del sistema y lo guarda como PNG
-    en la carpeta ``ia-tools/img`` del proyecto.
-    Retorna la ruta absoluta del archivo generado.
-    """
+    """Captura la pantalla y retorna la ruta del PNG guardado."""
     try:
         import mss  # type: ignore
         import mss.tools  # type: ignore
@@ -368,10 +359,10 @@ def tomar_captura_pantalla() -> str:
 
 def liberar_puerto(puerto: int) -> str:
     """
-    Termina el proceso que está escuchando en el puerto TCP especificado.
+    Termina el proceso que escucha en el puerto TCP dado.
 
     Args:
-        puerto: Número de puerto TCP (e.g. 8080, 4200, 3000).
+        puerto: Número de puerto TCP (e.g. 8080, 3000).
     """
     sistema = _so()
     try:
@@ -409,11 +400,11 @@ def liberar_puerto(puerto: int) -> str:
 
 def obtener_arbol_directorios(ruta: str, profundidad: int = 2) -> str:
     """
-    Genera un árbol visual de directorios hasta el nivel de profundidad indicado.
+    Genera árbol visual de directorios hasta la profundidad indicada.
 
     Args:
-        ruta: Ruta raíz del árbol. Acepta ~.
-        profundidad: Máximo de niveles a mostrar (por defecto 2).
+        ruta: Ruta raíz; acepta ~.
+        profundidad: Niveles máximos a mostrar (por defecto 2).
     """
     path = os.path.realpath(os.path.expanduser(ruta))
     if not os.path.exists(path):
@@ -443,7 +434,7 @@ def obtener_arbol_directorios(ruta: str, profundidad: int = 2) -> str:
 
 
 def listar_contenedores_activos() -> str:
-    """Lista todos los contenedores Docker que están en ejecución."""
+    """Lista los contenedores Docker en ejecución."""
     try:
         result = subprocess.run(
             ["docker", "ps", "--format",
@@ -461,10 +452,10 @@ def listar_contenedores_activos() -> str:
 
 def reiniciar_contenedor(nombre_o_id: str) -> str:
     """
-    Reinicia un contenedor Docker identificado por su nombre o ID.
+    Reinicia un contenedor Docker.
 
     Args:
-        nombre_o_id: Nombre o ID del contenedor Docker.
+        nombre_o_id: Nombre o ID del contenedor.
     """
     try:
         result = subprocess.run(
@@ -482,10 +473,10 @@ def reiniciar_contenedor(nombre_o_id: str) -> str:
 
 def obtener_estado_git(ruta_proyecto: str) -> str:
     """
-    Ejecuta git status en el directorio de proyecto indicado y devuelve la salida como texto plano.
+    Ejecuta git status en el directorio indicado y retorna la salida.
 
     Args:
-        ruta_proyecto: Ruta absoluta o relativa al directorio raíz del repositorio Git. Acepta ~.
+        ruta_proyecto: Ruta al directorio raíz del repositorio; acepta ~.
     """
     path = os.path.realpath(os.path.expanduser(ruta_proyecto))
     if not os.path.exists(path):
@@ -505,11 +496,11 @@ def obtener_estado_git(ruta_proyecto: str) -> str:
 
 def analizar_ultimos_logs(ruta_archivo: str, lineas: int = 50) -> str:
     """
-    Lee y devuelve las últimas N líneas de un archivo de log de forma eficiente.
+    Retorna las últimas N líneas de un archivo de log.
 
     Args:
-        ruta_archivo: Ruta absoluta o relativa al archivo de log. Acepta ~.
-        lineas: Número de líneas finales a devolver (por defecto 50).
+        ruta_archivo: Ruta al archivo de log; acepta ~.
+        lineas: Cantidad de líneas finales a devolver (por defecto 50).
     """
     path = os.path.realpath(os.path.expanduser(ruta_archivo))
     if not os.path.exists(path):
@@ -541,11 +532,11 @@ def analizar_ultimos_logs(ruta_archivo: str, lineas: int = 50) -> str:
 
 def mostrar_notificacion(titulo: str, mensaje: str) -> str:
     """
-    Muestra una notificación nativa del sistema operativo.
+    Muestra una notificación nativa del SO.
 
     Args:
         titulo: Título de la notificación.
-        mensaje: Cuerpo / texto de la notificación.
+        mensaje: Texto del cuerpo.
     """
     sistema = _so()
     try:
@@ -568,7 +559,7 @@ def mostrar_notificacion(titulo: str, mensaje: str) -> str:
 
 def redactar_email(destinatario: str, asunto: str, cuerpo: str) -> str:
     """
-    Abre el cliente de correo electrónico predeterminado con un borrador prellenado.
+    Abre el cliente de correo con un borrador prellenado.
 
     Args:
         destinatario: Dirección de correo del destinatario.
@@ -595,14 +586,12 @@ def redactar_email(destinatario: str, asunto: str, cuerpo: str) -> str:
 
 def guardar_documento(contenido: str, nombre_archivo: str = "documento.txt", ruta_carpeta: str = "") -> str:
     """
-    Genera y guarda un documento de texto en el escritorio (o carpeta indicada).
-    Úsala cuando el usuario pida crear un informe, reporte, resumen, carta, lista
-    u otro documento con contenido estructurado.
+    Guarda texto como archivo en el escritorio (o carpeta indicada). Retorna la ruta.
 
     Args:
         contenido: Texto completo del documento.
-        nombre_archivo: Nombre con extensión (p.ej. 'reporte.txt', 'resumen.md').
-        ruta_carpeta: Carpeta destino; si vacía, usa el escritorio del usuario.
+        nombre_archivo: Nombre con extensión (e.g. 'reporte.txt', 'resumen.md').
+        ruta_carpeta: Carpeta destino; si vacía, usa el escritorio.
     """
     try:
         carpeta = os.path.expanduser(ruta_carpeta) if ruta_carpeta else os.path.join(os.path.expanduser("~"), "Desktop")
@@ -617,11 +606,11 @@ def guardar_documento(contenido: str, nombre_archivo: str = "documento.txt", rut
 
 def guardar_nota(texto: str, nombre_archivo: str = "jarvis_nota.txt") -> str:
     """
-    Guarda (o añade) texto en un archivo de notas en el escritorio del usuario.
+    Añade texto a un archivo de notas en el escritorio. Retorna la ruta.
 
     Args:
         texto: Contenido de la nota.
-        nombre_archivo: Nombre del archivo de destino (por defecto 'jarvis_nota.txt').
+        nombre_archivo: Nombre del archivo (por defecto 'jarvis_nota.txt').
     """
     try:
         escritorio = os.path.join(os.path.expanduser("~"), "Desktop")
@@ -632,6 +621,65 @@ def guardar_nota(texto: str, nombre_archivo: str = "jarvis_nota.txt") -> str:
         return f"Nota guardada en: {ruta}"
     except Exception as exc:  # noqa: BLE001
         return f"[Error al guardar la nota: {exc}]"
+
+
+
+# ---------------------------------------------------------------------------
+# image_gen_tools
+# ---------------------------------------------------------------------------
+
+def generar_imagen(descripcion: str, estilo: str = "") -> str:
+    """
+    Genera una imagen IA desde una descripción y la guarda en ia-tools/img/. Retorna la ruta del PNG.
+
+    Args:
+        descripcion: Descripción detallada de la imagen a generar.
+        estilo: Estilo visual opcional (e.g. 'fotorrealista', 'anime', 'acuarela', 'pixel art').
+    """
+    import time as _time
+
+    prompt = f"{descripcion}. Estilo: {estilo}" if estilo.strip() else descripcion
+    ts = int(_time.time() * 1_000_000)
+    output_path = str(_img_dir() / f"imagen_{ts}.png")
+
+    # 1. Intentar con OpenAI DALL-E 3
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if openai_key:
+        try:
+            from openai import OpenAI  # type: ignore
+            import requests as _req   # type: ignore
+
+            client = OpenAI(api_key=openai_key)
+            response = client.images.generate(
+                model="dall-e-3",
+                prompt=prompt,
+                size="1024x1024",
+                quality="standard",
+                n=1,
+            )
+            image_url = response.data[0].url
+            img_data = _req.get(image_url, timeout=30).content
+            with open(output_path, "wb") as f:
+                f.write(img_data)
+            return output_path
+        except Exception as exc:  # noqa: BLE001
+            return f"[Error al generar imagen con DALL-E 3: {exc}]"
+
+    # 2. Intentar con Google Imagen
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if gemini_key:
+        try:
+            import google.generativeai as genai  # type: ignore
+
+            genai.configure(api_key=gemini_key)
+            model = genai.ImageGenerationModel("imagen-3.0-generate-001")
+            result = model.generate_images(prompt=prompt, number_of_images=1)
+            result.images[0].save(output_path)
+            return output_path
+        except Exception as exc:  # noqa: BLE001
+            return f"[Error al generar imagen con Imagen: {exc}]"
+
+    return "[Error: se necesita OPENAI_API_KEY o GEMINI_API_KEY para generar imágenes.]"
 
 
 # ---------------------------------------------------------------------------
@@ -666,4 +714,6 @@ ALL_TOOLS: list[Callable[..., str]] = [
     # Jarvis-specific
     guardar_documento,
     guardar_nota,
+    # image_gen_tools
+    generar_imagen,
 ]

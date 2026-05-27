@@ -620,7 +620,11 @@ class JarvisWindow(_DND_BASE):
                               font=("Helvetica Neue", 10, "bold"))
 
                 # Subtítulo: tipo de captura
-                _type_lbl = "Captura de pantalla" if "screenshot" in _fname else "Foto webcam"
+                _type_lbl = (
+                    "Captura de pantalla" if "screenshot" in _fname
+                    else "Imagen generada" if _fname.startswith("imagen_")
+                    else "Foto webcam"
+                )
                 c.create_text(_text_x, _cy1 + 30, text=_type_lbl, anchor="w",
                               fill=_dc("#888888", 0.80),
                               font=("Helvetica Neue", 8))
