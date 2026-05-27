@@ -1343,9 +1343,15 @@ class JarvisWindow(_DND_BASE):
     def _process_text_command(self, command: str) -> None:
         """Procesa un comando enviado por texto (hilo secundario)."""
         self._transition(_THINKING)
+        img_path = self._pending_image_path
+        if img_path:
+            self._clear_image()
         try:
             if self._agent:
-                reply = self._agent.send_message(command)
+                if img_path:
+                    reply = self._agent.send_message_with_image(command, img_path)
+                else:
+                    reply = self._agent.send_message(command)
             else:
                 reply = "[Modo demo]"
         except Exception as exc:
