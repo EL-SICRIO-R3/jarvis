@@ -46,7 +46,7 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_clipboard_content",
-            "description": "Lee y retorna el texto actual del portapapeles del sistema.",
+            "description": "Retorna el texto actual del portapapeles.",
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
@@ -54,7 +54,7 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_os_info",
-            "description": "Devuelve un resumen detallado del sistema operativo y el hardware del host.",
+            "description": "Retorna resumen del SO, hardware y arquitectura del host.",
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
@@ -62,12 +62,12 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "run_terminal_command",
-            "description": "Ejecuta un comando de terminal de una lista de permitidos (solo lectura/informativos) y devuelve su salida.",
+            "description": "Ejecuta un comando de solo lectura y retorna su salida.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "command_name": {"type": "string", "description": "Clave del comando a ejecutar (e.g. 'ls', 'df', 'pip', 'ps')."},
-                    "argument": {"type": "string", "description": "Argumento de ruta opcional (solo para 'ls' y 'dir')."},
+                    "command_name": {"type": "string", "description": "Clave del comando: 'ls', 'df', 'pip', 'ps', etc."},
+                    "argument": {"type": "string", "description": "Ruta opcional (solo 'ls' y 'dir')."},
                 },
                 "required": ["command_name"],
             },
@@ -78,11 +78,11 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "open_browser",
-            "description": "Abre una URL en el navegador predeterminado del sistema.",
+            "description": "Abre una URL en el navegador predeterminado.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "url": {"type": "string", "description": "La URL a abrir. Si no tiene esquema, se añade https:// automáticamente."}
+                    "url": {"type": "string", "description": "URL a abrir (se añade https:// si falta esquema)."}
                 },
                 "required": ["url"],
             },
@@ -92,12 +92,12 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "extract_text_from_url",
-            "description": "Descarga una página web y devuelve su texto plano limpio (scripts y estilos eliminados).",
+            "description": "Descarga una URL y retorna su texto plano limpio.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "url": {"type": "string", "description": "URL de la página a extraer."},
-                    "max_chars": {"type": "integer", "description": "Límite de caracteres del texto devuelto (por defecto 8000)."},
+                    "url": {"type": "string", "description": "URL de la página."},
+                    "max_chars": {"type": "integer", "description": "Límite de caracteres (por defecto 8000)."},
                 },
                 "required": ["url"],
             },
@@ -108,11 +108,11 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Lee y devuelve el contenido completo de un archivo de texto o PDF.",
+            "description": "Retorna el contenido de un archivo de texto o PDF.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "file_path": {"type": "string", "description": "Ruta al archivo. Acepta ~ (tilde expansion)."},
+                    "file_path": {"type": "string", "description": "Ruta al archivo; acepta ~."},
                     "encoding": {"type": "string", "description": "Codificación (por defecto utf-8)."},
                 },
                 "required": ["file_path"],
@@ -123,12 +123,12 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "create_file",
-            "description": "Crea un archivo de texto UTF-8 en la ruta especificada.",
+            "description": "Crea o sobreescribe un archivo de texto UTF-8.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "file_path": {"type": "string", "description": "Ruta del archivo a crear. Acepta ~."},
-                    "content": {"type": "string", "description": "Contenido a escribir en el archivo."},
+                    "file_path": {"type": "string", "description": "Ruta del archivo; acepta ~."},
+                    "content": {"type": "string", "description": "Contenido a escribir."},
                     "overwrite": {"type": "boolean", "description": "Si True, reemplaza el archivo si ya existe."},
                 },
                 "required": ["file_path", "content"],
@@ -139,12 +139,12 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "list_directory",
-            "description": "Lista los archivos y subdirectorios de una ruta con sus tamaños.",
+            "description": "Lista archivos y subdirectorios con sus tamaños.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "directory_path": {"type": "string", "description": "Ruta del directorio a listar (por defecto el directorio actual)."},
-                    "show_hidden": {"type": "boolean", "description": "Si True, incluye archivos y carpetas ocultos."},
+                    "directory_path": {"type": "string", "description": "Ruta a listar (por defecto directorio actual)."},
+                    "show_hidden": {"type": "boolean", "description": "Si True, incluye entradas ocultas."},
                 },
                 "required": [],
             },
@@ -155,7 +155,7 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "capturar_foto_webcam",
-            "description": "Captura una foto con la webcam principal del sistema y la guarda como JPEG. Retorna la ruta del archivo.",
+            "description": "Captura foto con la webcam y retorna la ruta del JPEG guardado.",
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
@@ -163,8 +163,24 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "tomar_captura_pantalla",
-            "description": "Toma un screenshot de la pantalla principal del sistema y lo guarda como PNG en un archivo temporal. Retorna la ruta del archivo.",
+            "description": "Captura la pantalla y retorna la ruta del PNG guardado.",
             "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    # ── image_gen_tools ───────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "generar_imagen",
+            "description": "Genera una imagen IA desde una descripción y retorna la ruta del PNG guardado.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "descripcion": {"type": "string", "description": "Descripción detallada de la imagen."},
+                    "estilo": {"type": "string", "description": "Estilo visual opcional (e.g. 'fotorrealista', 'anime', 'acuarela')."},
+                },
+                "required": ["descripcion"],
+            },
         },
     },
     # ── dev_tools ─────────────────────────────────────────────────────────
@@ -172,11 +188,11 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "liberar_puerto",
-            "description": "Termina el proceso que está escuchando en el puerto TCP especificado.",
+            "description": "Termina el proceso que escucha en el puerto TCP dado.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "puerto": {"type": "integer", "description": "Número de puerto TCP (e.g. 8080, 4200, 3000)."}
+                    "puerto": {"type": "integer", "description": "Número de puerto TCP (e.g. 8080, 3000)."}
                 },
                 "required": ["puerto"],
             },
@@ -186,12 +202,12 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "obtener_arbol_directorios",
-            "description": "Genera un árbol visual de directorios hasta el nivel de profundidad indicado.",
+            "description": "Genera árbol visual de directorios hasta la profundidad indicada.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "ruta": {"type": "string", "description": "Ruta raíz del árbol. Acepta ~."},
-                    "profundidad": {"type": "integer", "description": "Máximo de niveles a mostrar (por defecto 2)."},
+                    "ruta": {"type": "string", "description": "Ruta raíz; acepta ~."},
+                    "profundidad": {"type": "integer", "description": "Niveles máximos a mostrar (por defecto 2)."},
                 },
                 "required": ["ruta"],
             },
@@ -201,7 +217,7 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "listar_contenedores_activos",
-            "description": "Lista todos los contenedores Docker que están en ejecución.",
+            "description": "Lista los contenedores Docker en ejecución.",
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
@@ -209,11 +225,11 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "reiniciar_contenedor",
-            "description": "Reinicia un contenedor Docker identificado por su nombre o ID.",
+            "description": "Reinicia un contenedor Docker.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "nombre_o_id": {"type": "string", "description": "Nombre o ID del contenedor Docker."}
+                    "nombre_o_id": {"type": "string", "description": "Nombre o ID del contenedor."}
                 },
                 "required": ["nombre_o_id"],
             },
@@ -223,11 +239,11 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "obtener_estado_git",
-            "description": "Ejecuta git status en el directorio de proyecto indicado y devuelve la salida como texto plano.",
+            "description": "Ejecuta git status en la ruta indicada y retorna la salida.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "ruta_proyecto": {"type": "string", "description": "Ruta absoluta o relativa al directorio raíz del repositorio Git. Acepta ~."}
+                    "ruta_proyecto": {"type": "string", "description": "Ruta al directorio raíz del repositorio; acepta ~."}
                 },
                 "required": ["ruta_proyecto"],
             },
@@ -237,12 +253,12 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "analizar_ultimos_logs",
-            "description": "Lee y devuelve las últimas N líneas de un archivo de log de forma eficiente.",
+            "description": "Retorna las últimas N líneas de un archivo de log.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "ruta_archivo": {"type": "string", "description": "Ruta absoluta o relativa al archivo de log. Acepta ~."},
-                    "lineas": {"type": "integer", "description": "Número de líneas finales a devolver (por defecto 50)."},
+                    "ruta_archivo": {"type": "string", "description": "Ruta al archivo de log; acepta ~."},
+                    "lineas": {"type": "integer", "description": "Cantidad de líneas finales (por defecto 50)."},
                 },
                 "required": ["ruta_archivo"],
             },
@@ -253,12 +269,12 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "mostrar_notificacion",
-            "description": "Muestra una notificación nativa del sistema operativo.",
+            "description": "Muestra una notificación nativa del SO.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "titulo": {"type": "string", "description": "Título de la notificación."},
-                    "mensaje": {"type": "string", "description": "Cuerpo / texto de la notificación."},
+                    "mensaje": {"type": "string", "description": "Texto del cuerpo."},
                 },
                 "required": ["titulo", "mensaje"],
             },
@@ -268,7 +284,7 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "redactar_email",
-            "description": "Abre el cliente de correo electrónico predeterminado con un borrador prellenado.",
+            "description": "Abre el cliente de correo con un borrador prellenado.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -282,40 +298,42 @@ OPENAI_TOOLS = [
     },
 ]
 
-SYSTEM_PROMPT = """Eres Jarvis, asistente personal de IA con carácter propio.
+SYSTEM_PROMPT = """Eres Jarvis, asistente personal de IA con un carácter afilado y sin filtros.
 
 Personalidad:
-- Directo e inteligente. No eres servil ni dices frases vacías como "¡Por supuesto!"
-  o "¡Claro que sí!". Vas al grano.
-- Tienes un punto de ironía sutil cuando el contexto lo permite, pero sin pasarte.
-- Culto y articulado: hablas como una persona real, no como un manual de instrucciones.
-- Opinas cuando es relevante, con tacto pero sin adulación.
-- Adaptas el tono: formal si el usuario lo es, más relajado si la conversación lo pide.
+- Directo, inteligente y sin pelos en la lengua. Jamás dices vainas serviles como "¡Por supuesto!"
+  o "¡Claro que sí!". Esas frases te dan asco.
+- Bromista y sarcástico: te gusta el humor negro, las groserías ocasionales y los comentarios
+  irrespetuosos cuando el contexto lo aguanta. No eres un chatbot de guardería.
+- Hablas como un cuate listo, no como el manual de una lavadora.
+- Opinas sin tapujos. Si algo está mal hecho, lo dices. Si el usuario dice una estupidez, se la señalas.
+- Adaptas el tono: si el usuario se pone formal te aguantas un poco; si se pone informal te sueltas.
 
 Capacidades:
 - Leer el portapapeles del sistema.
-- Obtener información del sistema operativo (básica y detallada).
-- Ejecutar comandos de terminal de solo lectura (ls, df, ps, pip, etc.).
+- Obtener información del sistema operativo.
+- Ejecutar comandos de terminal de solo lectura.
 - Abrir el navegador en cualquier URL.
-- Extraer el texto de cualquier página web.
+- Extraer el texto de páginas web.
 - Leer archivos de texto y PDFs.
 - Crear archivos de texto y listar directorios.
-- Capturar fotos con la webcam y analizarlas visualmente.
-- Tomar capturas de pantalla del escritorio y analizarlas visualmente.
+- Capturar fotos con la webcam y analizarlas.
+- Tomar capturas de pantalla y analizarlas.
+- Generar imágenes con IA a partir de una descripción (DALL-E 3 / Imagen).
 - Liberar puertos TCP ocupados.
 - Mostrar el árbol de directorios de un proyecto.
 - Gestionar contenedores Docker (listar y reiniciar).
-- Consultar el estado de un repositorio Git (git status).
+- Consultar el estado de un repositorio Git.
 - Analizar las últimas líneas de un archivo de log.
 - Mostrar notificaciones nativas del sistema operativo.
-- Redactar y abrir borradores de correo en el cliente de email predeterminado.
+- Redactar borradores de correo en el cliente de email.
 
 Reglas operativas:
 1. Responde en el idioma del usuario (normalmente español).
 2. Respuestas cortas por defecto; desarrolla solo cuando la complejidad lo exige.
 3. Usa la herramienta apropiada cuando el usuario pide ejecutar algo en la computadora.
-4. Si no sabes algo, dilo claramente. Nunca inventes información.
-5. Cuando captures una imagen (webcam o pantalla), recibirás los datos visuales de forma directa: descríbela, analízala e identifica su contenido con detalle.
+4. Si no sabes algo, dilo claro. Nunca inventes información.
+5. Cuando captures o generes una imagen, recibirás los datos visuales directamente: descríbela con detalle.
 """
 
 
@@ -335,8 +353,8 @@ class JarvisAgent:
 
     SUPPORTED_PROVIDERS = ("gemini", "openai")
 
-    # Herramientas que devuelven una ruta de imagen capturada
-    _VISION_CAPTURE_TOOLS = frozenset({"capturar_foto_webcam", "tomar_captura_pantalla"})
+    # Herramientas que devuelven una ruta de imagen capturada o generada
+    _VISION_CAPTURE_TOOLS = frozenset({"capturar_foto_webcam", "tomar_captura_pantalla", "generar_imagen"})
 
     # Herramientas que guardan archivos (resultado incluye la ruta absoluta)
     _SAVE_TOOLS = frozenset({"guardar_documento", "guardar_nota", "create_file"})

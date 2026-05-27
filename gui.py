@@ -620,7 +620,11 @@ class JarvisWindow(_DND_BASE):
                               font=("Helvetica Neue", 10, "bold"))
 
                 # Subtítulo: tipo de captura
-                _type_lbl = "Captura de pantalla" if "screenshot" in _fname else "Foto webcam"
+                _type_lbl = (
+                    "Captura de pantalla" if "screenshot" in _fname
+                    else "Imagen generada" if _fname.startswith("imagen_")
+                    else "Foto webcam"
+                )
                 c.create_text(_text_x, _cy1 + 30, text=_type_lbl, anchor="w",
                               fill=_dc("#888888", 0.80),
                               font=("Helvetica Neue", 8))
@@ -1155,6 +1159,10 @@ class JarvisWindow(_DND_BASE):
             _saved = self._agent.last_saved_path
             self._agent.last_saved_path = None
             self.after(0, lambda p=_saved: self._show_doc_preview(p))
+        if self._agent and self._agent.last_captured_image_path:
+            _cpath = self._agent.last_captured_image_path
+            self._agent.last_captured_image_path = None
+            self.after(0, lambda p=_cpath: self._show_capture_preview(p))
         self._show_response(f"Jarvis: {reply}")
         self._transition(_SPEAKING)
         self._speak(reply)
