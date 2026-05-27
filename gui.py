@@ -1362,7 +1362,7 @@ class JarvisWindow(_DND_BASE):
         self.overrideredirect(False)
         self.attributes("-topmost", False)
         self._bottom_frame.pack(side="bottom", fill="x")
-        # Restaurar geometía y ajustar alto si el modo texto está activo
+        # Restaurar geometría y ajustar alto si el modo texto está activo
         geo = self._restore_geometry
         wh, *pos_parts = geo.replace('-', '+-').split('+')
         pos = '+' + '+'.join(p.replace('+-', '-') for p in pos_parts if p) if pos_parts else ''
