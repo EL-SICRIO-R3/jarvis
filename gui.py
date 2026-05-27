@@ -76,6 +76,7 @@ _EDGE_VOICES = [                       # voces neural edge-tts (español)
 # Voces ElevenLabs predefinidas (id obtenido de la API de ElevenLabs)
 _ELEVEN_VOICES = [
     ("Adam · (ElevenLabs)", "pNInz6obpgDQGcFmaJgB"),
+    ("Agustín · (ElevenLabs)", "ByVRQtaK1WDOvTmP1PKO"),
     ("Antoni · (ElevenLabs)", "ErXwobaYiN019PkySvjV"),
     ("Arnold · (ElevenLabs)", "VR6AewLTigWG4xSOukaG"),
     ("Bella · (ElevenLabs)", "EXAVITQu4vr4xnSDxMaL"),
@@ -1509,4 +1510,3 @@ class JarvisWindow(_DND_BASE):
             self.hide()
         else:
             self.show()
-
