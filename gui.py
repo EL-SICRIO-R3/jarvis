@@ -1159,6 +1159,10 @@ class JarvisWindow(_DND_BASE):
             _saved = self._agent.last_saved_path
             self._agent.last_saved_path = None
             self.after(0, lambda p=_saved: self._show_doc_preview(p))
+        if self._agent and self._agent.last_captured_image_path:
+            _cpath = self._agent.last_captured_image_path
+            self._agent.last_captured_image_path = None
+            self.after(0, lambda p=_cpath: self._show_capture_preview(p))
         self._show_response(f"Jarvis: {reply}")
         self._transition(_SPEAKING)
         self._speak(reply)
