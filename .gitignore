@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Imágenes generadas por Jarvis (webcam / screenshots)
+ia-tools/img/*.jpg
+ia-tools/img/*.jpeg
+ia-tools/img/*.png
+!ia-tools/img/.gitkeep

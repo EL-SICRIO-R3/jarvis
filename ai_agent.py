@@ -16,126 +16,32 @@ Variables de entorno necesarias (al menos una):
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Callable, Optional
 
 from ai_tools_hub import ALL_TOOLS
-from tools import TOOLS_MAP, JARVIS_CUSTOM_CALLABLES
 from dotenv import load_dotenv
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Lista combinada de herramientas para Gemini (callables con type hints y
-# docstrings — Gemini genera el esquema automáticamente).
+# Herramientas para Gemini — ALL_TOOLS contiene todos los callables de
+# ai_tools_hub; Gemini genera los esquemas automáticamente desde los
+# type hints y docstrings.
 # ---------------------------------------------------------------------------
 
-GEMINI_TOOLS = JARVIS_CUSTOM_CALLABLES + ALL_TOOLS
+GEMINI_TOOLS = ALL_TOOLS
+
+# ---------------------------------------------------------------------------
+# Mapa nombre → callable para la ejecución de herramientas
+# ---------------------------------------------------------------------------
+
+TOOLS_MAP: dict[str, Callable[..., str]] = {fn.__name__: fn for fn in ALL_TOOLS}
 
 # ---------------------------------------------------------------------------
 # Esquema de herramientas para OpenAI (Function Calling manual)
 # ---------------------------------------------------------------------------
 
 OPENAI_TOOLS = [
-    # ── Jarvis-específicas ────────────────────────────────────────────────
-    {
-        "type": "function",
-        "function": {
-            "name": "copiar_al_portapapeles",
-            "description": "Copia un texto al portapapeles del sistema.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "texto": {"type": "string", "description": "Texto que se copiará al portapapeles."}
-                },
-                "required": ["texto"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "abrir_vscode",
-            "description": "Abre Visual Studio Code, opcionalmente en una ruta específica.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ruta": {"type": "string", "description": "Ruta del directorio o archivo a abrir en VSCode."}
-                },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "abrir_aplicacion",
-            "description": "Abre una aplicación del sistema por nombre (p. ej. 'Safari', 'Notepad').",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "nombre": {"type": "string", "description": "Nombre de la aplicación a abrir."}
-                },
-                "required": ["nombre"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "abrir_navegador",
-            "description": (
-                "Abre el navegador predeterminado en una URL o dominio, o realiza una búsqueda en Google. "
-                "Usa esta herramienta cuando el usuario pida: abrir una página web, navegar a un sitio, "
-                "buscar algo en internet, abrir una pestaña nueva con X, ver algo en YouTube, "
-                "visitar un sitio, buscar en Google, etc."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "URL o dominio a abrir. Omitir si se usa el parámetro buscar.",
-                    },
-                    "buscar": {
-                        "type": "string",
-                        "description": "Término o frase para buscar en Google.",
-                    },
-                },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "guardar_nota",
-            "description": "Guarda texto en un archivo de notas en el escritorio del usuario.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "texto": {"type": "string", "description": "Contenido de la nota."},
-                    "nombre_archivo": {"type": "string", "description": "Nombre del archivo de destino (opcional)."},
-                },
-                "required": ["texto"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "guardar_documento",
-            "description": "Genera y guarda un documento de texto (informe, reporte, resumen, carta, lista, etc.) en el escritorio del usuario. Úsala siempre que el usuario pida 'genera un documento', 'crea un informe', 'escribe un reporte', 'guarda un resumen', 'hazme una carta', etc.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "contenido": {"type": "string", "description": "Contenido completo del documento."},
-                    "nombre_archivo": {"type": "string", "description": "Nombre del archivo con extensión."},
-                    "ruta_carpeta": {"type": "string", "description": "Carpeta de destino. Si se omite, se guarda en el escritorio."},
-                },
-                "required": ["contenido"],
-            },
-        },
-    },
-    # ── ai-tools-hub / system ─────────────────────────────────────────────
+    # ── system_tools ──────────────────────────────────────────────────────
     {
         "type": "function",
         "function": {
@@ -167,7 +73,7 @@ OPENAI_TOOLS = [
             },
         },
     },
-    # ── ai-tools-hub / web ────────────────────────────────────────────────
+    # ── web_tools ─────────────────────────────────────────────────────────
     {
         "type": "function",
         "function": {
@@ -197,7 +103,7 @@ OPENAI_TOOLS = [
             },
         },
     },
-    # ── ai-tools-hub / file ───────────────────────────────────────────────
+    # ── file_tools ────────────────────────────────────────────────────────
     {
         "type": "function",
         "function": {
@@ -244,7 +150,7 @@ OPENAI_TOOLS = [
             },
         },
     },
-    # ── ai-tools-hub / vision ─────────────────────────────────────────────
+    # ── vision_tools ──────────────────────────────────────────────────────
     {
         "type": "function",
         "function": {
@@ -253,7 +159,15 @@ OPENAI_TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
-    # ── ai-tools-hub / dev ────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "tomar_captura_pantalla",
+            "description": "Toma un screenshot de la pantalla principal del sistema y lo guarda como PNG en un archivo temporal. Retorna la ruta del archivo.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    # ── dev_tools ─────────────────────────────────────────────────────────
     {
         "type": "function",
         "function": {
@@ -305,7 +219,36 @@ OPENAI_TOOLS = [
             },
         },
     },
-    # ── ai-tools-hub / interaction ────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "obtener_estado_git",
+            "description": "Ejecuta git status en el directorio de proyecto indicado y devuelve la salida como texto plano.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ruta_proyecto": {"type": "string", "description": "Ruta absoluta o relativa al directorio raíz del repositorio Git. Acepta ~."}
+                },
+                "required": ["ruta_proyecto"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analizar_ultimos_logs",
+            "description": "Lee y devuelve las últimas N líneas de un archivo de log de forma eficiente.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ruta_archivo": {"type": "string", "description": "Ruta absoluta o relativa al archivo de log. Acepta ~."},
+                    "lineas": {"type": "integer", "description": "Número de líneas finales a devolver (por defecto 50)."},
+                },
+                "required": ["ruta_archivo"],
+            },
+        },
+    },
+    # ── interaction_tools ─────────────────────────────────────────────────
     {
         "type": "function",
         "function": {
@@ -350,40 +293,29 @@ Personalidad:
 - Adaptas el tono: formal si el usuario lo es, más relajado si la conversación lo pide.
 
 Capacidades:
-- Leer y escribir en el portapapeles del sistema.
-- Abrir aplicaciones y proyectos en VS Code.
-- Abrir el navegador en cualquier URL y realizar búsquedas en Google.
-- Extraer el texto de cualquier página web.
-- Guardar notas rápidas en el escritorio.
-- Generar y guardar documentos (informes, reportes, resúmenes, cartas, listas) en el escritorio.
-- Leer archivos de texto y PDFs.
-- Crear archivos y listar directorios.
+- Leer el portapapeles del sistema.
 - Obtener información del sistema operativo (básica y detallada).
 - Ejecutar comandos de terminal de solo lectura (ls, df, ps, pip, etc.).
-- Capturar fotos con la webcam.
+- Abrir el navegador en cualquier URL.
+- Extraer el texto de cualquier página web.
+- Leer archivos de texto y PDFs.
+- Crear archivos de texto y listar directorios.
+- Capturar fotos con la webcam y analizarlas visualmente.
+- Tomar capturas de pantalla del escritorio y analizarlas visualmente.
 - Liberar puertos TCP ocupados.
 - Mostrar el árbol de directorios de un proyecto.
 - Gestionar contenedores Docker (listar y reiniciar).
+- Consultar el estado de un repositorio Git (git status).
+- Analizar las últimas líneas de un archivo de log.
 - Mostrar notificaciones nativas del sistema operativo.
 - Redactar y abrir borradores de correo en el cliente de email predeterminado.
-
-=== REGLA OBLIGATORIA: GENERACIÓN DE DOCUMENTOS ===
-Si el usuario pide crear, generar, escribir, elaborar, redactar o preparar cualquier tipo
-de documento, informe, reporte, resumen, carta, lista, análisis, plan o texto estructurado:
-  1. DEBES llamar a la herramienta `guardar_documento` con el contenido COMPLETO.
-  2. NUNCA incluyas el contenido del documento en tu respuesta de texto.
-  3. Tras guardar, responde solo con una confirmación breve del nombre del archivo.
-
-Ejemplo CORRECTO:    → llamas a guardar_documento({contenido: "...", nombre_archivo: "informe.txt"})
-                     → respondes: "Guardado como informe.txt en el escritorio."
-Ejemplo INCORRECTO:  → responder el texto del documento sin llamar a guardar_documento.
-=====================================================
 
 Reglas operativas:
 1. Responde en el idioma del usuario (normalmente español).
 2. Respuestas cortas por defecto; desarrolla solo cuando la complejidad lo exige.
 3. Usa la herramienta apropiada cuando el usuario pide ejecutar algo en la computadora.
 4. Si no sabes algo, dilo claramente. Nunca inventes información.
+5. Cuando captures una imagen (webcam o pantalla), recibirás los datos visuales de forma directa: descríbela, analízala e identifica su contenido con detalle.
 """
 
 
@@ -403,10 +335,17 @@ class JarvisAgent:
 
     SUPPORTED_PROVIDERS = ("gemini", "openai")
 
+    # Herramientas que devuelven una ruta de imagen capturada
+    _VISION_CAPTURE_TOOLS = frozenset({"capturar_foto_webcam", "tomar_captura_pantalla"})
+
+    # Herramientas que guardan archivos (resultado incluye la ruta absoluta)
+    _SAVE_TOOLS = frozenset({"guardar_documento", "guardar_nota", "create_file"})
+
     def __init__(self, provider: Optional[str] = None) -> None:
         self._provider = self._resolve_provider(provider)
         self._history: list[dict] = []
-        self.last_saved_path: Optional[str] = None  # última ruta de doc/nota guardada
+        self.last_saved_path: Optional[str] = None          # leído por gui.py para ofrecer "abrir archivo"
+        self.last_captured_image_path: Optional[str] = None  # leído por gui.py para mostrar preview
 
         if self._provider == "gemini":
             self._init_gemini()
@@ -488,6 +427,7 @@ class JarvisAgent:
         Returns:
             str: Respuesta textual final del asistente.
         """
+        self.last_captured_image_path = None
         if self._provider == "gemini":
             return self._send_gemini(user_message)
         return self._send_openai(user_message)
@@ -502,6 +442,7 @@ class JarvisAgent:
         Returns:
             str: Respuesta textual del asistente.
         """
+        self.last_captured_image_path = None
         if self._provider == "gemini":
             return self._send_gemini_with_image(user_message, image_path)
         # OpenAI vision fallback — si no hay soporte, degradar a texto
@@ -540,6 +481,8 @@ class JarvisAgent:
 
             # Ejecutar cada herramienta y construir las respuestas
             tool_responses = []
+            captured_images: list = []  # (PIL.Image, path) para herramientas de visión
+
             for call in tool_calls:
                 resultado = self._execute_tool(call.name, dict(call.args))
                 tool_responses.append(
@@ -550,8 +493,23 @@ class JarvisAgent:
                         )
                     )
                 )
+                # Si es una herramienta de captura de imagen, cargar la imagen
+                if call.name in self._VISION_CAPTURE_TOOLS:
+                    _path = resultado.strip()
+                    if not _path.startswith("[") and os.path.isfile(_path):
+                        try:
+                            from PIL import Image as _PILImg  # type: ignore
+                            captured_images.append((_PILImg.open(_path), _path))
+                        except Exception:
+                            pass
 
-            response = self._chat.send_message(tool_responses)
+            # Si se capturaron imágenes, incluirlas en el mensaje para análisis visual
+            if captured_images:
+                self.last_captured_image_path = captured_images[-1][1]
+                parts: list = list(tool_responses) + [img for img, _ in captured_images]
+                response = self._chat.send_message(parts)
+            else:
+                response = self._chat.send_message(tool_responses)
 
         # Extraer texto de la respuesta final
         try:
@@ -637,6 +595,7 @@ class JarvisAgent:
             messages.append(message)
 
             # Ejecutar cada herramienta
+            captured_image_paths: list[str] = []
             for tool_call in message.tool_calls:
                 try:
                     args = json.loads(tool_call.function.arguments)
@@ -652,6 +611,36 @@ class JarvisAgent:
                         "content": resultado,
                     }
                 )
+                # Registrar imágenes capturadas para envío visual
+                if tool_call.function.name in self._VISION_CAPTURE_TOOLS:
+                    _path = resultado.strip()
+                    if not _path.startswith("[") and os.path.isfile(_path):
+                        captured_image_paths.append(_path)
+
+            # Si se capturaron imágenes, inyectarlas como mensaje de visión
+            if captured_image_paths:
+                import base64
+                vision_content: list = []
+                for _p in captured_image_paths:
+                    _ext = os.path.splitext(_p)[1].lower().lstrip(".")
+                    if _ext == "jpg":
+                        _ext = "jpeg"
+                    try:
+                        with open(_p, "rb") as _f:
+                            _b64 = base64.b64encode(_f.read()).decode()
+                        vision_content.append({
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/{_ext};base64,{_b64}"},
+                        })
+                    except Exception:
+                        pass
+                if vision_content:
+                    vision_content.append({
+                        "type": "text",
+                        "text": "Imagen(es) capturada(s). Descríbelas al usuario en detalle.",
+                    })
+                    messages.append({"role": "user", "content": vision_content})
+                self.last_captured_image_path = captured_image_paths[-1]
 
     # ------------------------------------------------------------------
     # Ejecución de herramientas
@@ -673,8 +662,16 @@ class JarvisAgent:
             return f"[Herramienta '{nombre}' no encontrada.]"
         try:
             resultado = str(func(**args))
-            if nombre in ("guardar_nota", "guardar_documento") and "en: " in resultado:
-                self.last_saved_path = resultado.split("en: ", 1)[1].strip()
+            # Rastrear ruta cuando se guarda un archivo (para el preview de gui.py)
+            if nombre in self._SAVE_TOOLS:
+                if resultado and not resultado.startswith("["):
+                    # El resultado contiene la ruta absoluta al final, tras "en: " o ": "
+                    for marker in ("en: ", "en:", ": "):
+                        if marker in resultado:
+                            candidate = resultado.rsplit(marker, 1)[-1].strip()
+                            if os.path.isabs(candidate) and os.path.isfile(candidate):
+                                self.last_saved_path = candidate
+                                break
             return resultado
         except TypeError as exc:
             return f"[Error de argumentos en '{nombre}': {exc}]"
