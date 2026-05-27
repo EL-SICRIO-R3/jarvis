@@ -45,6 +45,15 @@ def _img_dir() -> Path:
     return img_dir
 
 
+def _video_dir() -> Path:
+    """
+    Devuelve la ruta ``<proyecto>/ia-tools/video`` y la crea si no existe.
+    """
+    video_dir = Path(__file__).parent / "ia-tools" / "video"
+    video_dir.mkdir(parents=True, exist_ok=True)
+    return video_dir
+
+
 # ---------------------------------------------------------------------------
 # system_tools
 # ---------------------------------------------------------------------------
@@ -688,6 +697,92 @@ def generar_imagen(descripcion: str, estilo: str = "") -> str:
     return "[Error: se necesita OPENAI_API_KEY o GEMINI_API_KEY para generar imágenes.]"
 
 
+def generar_video(descripcion: str, duracion: int = 5, estilo: str = "") -> str:
+    """
+    Genera un video IA desde una descripción y lo guarda en ia-tools/video/. Retorna la ruta del MP4.
+
+    Args:
+        descripcion: Descripción detallada del video a generar.
+        duracion: Duración en segundos (por defecto 5; máximo 8 para Veo, 10 para RunwayML).
+        estilo: Estilo visual opcional (e.g. 'cinemático', 'animado', 'documental').
+    """
+    import time as _time
+
+    prompt = f"{descripcion}. Estilo: {estilo}" if estilo.strip() else descripcion
+    ts = int(_time.time() * 1_000_000)
+    output_path = str(_video_dir() / f"video_{ts}.mp4")
+
+    # 1. Intentar con Google Veo (requiere GEMINI_API_KEY)
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if gemini_key:
+        try:
+            from google import genai as _ggenai  # type: ignore
+            from google.genai import types as _ggenai_types  # type: ignore
+
+            client = _ggenai.Client(api_key=gemini_key)
+            operation = client.models.generate_videos(
+                model="veo-2.0-generate-001",
+                prompt=prompt,
+                config=_ggenai_types.GenerateVideosConfig(
+                    number_of_videos=1,
+                    duration_seconds=min(max(int(duracion), 5), 8),
+                    aspect_ratio="16:9",
+                ),
+            )
+            timeout = 300
+            start = _time.time()
+            while not operation.done:
+                if _time.time() - start > timeout:
+                    return "[Error: tiempo límite de 5 minutos superado al generar video con Veo.]"
+                _time.sleep(10)
+                operation = client.operations.get(operation)
+
+            if operation.error:
+                raise RuntimeError(str(operation.error))
+
+            video_bytes = operation.result.generated_videos[0].video.video_bytes
+            with open(output_path, "wb") as f:
+                f.write(video_bytes)
+            return output_path
+        except Exception as exc:  # noqa: BLE001
+            return f"[Error al generar video con Veo: {exc}]"
+
+    # 2. Intentar con RunwayML (requiere RUNWAYML_API_KEY)
+    runway_key = os.getenv("RUNWAYML_API_KEY")
+    if runway_key:
+        try:
+            from runwayml import RunwayML  # type: ignore
+            import requests as _req  # type: ignore
+
+            client = RunwayML(api_key=runway_key)
+            task = client.text_to_video.create(
+                model="gen4_turbo",
+                prompt_text=prompt,
+                duration=min(max(int(duracion), 5), 10),
+                ratio="1280:720",
+            )
+            timeout = 180
+            start = _time.time()
+            while task.status not in ("SUCCEEDED", "FAILED"):
+                if _time.time() - start > timeout:
+                    return "[Error: tiempo límite de 3 minutos superado al generar video con RunwayML.]"
+                _time.sleep(8)
+                task = client.tasks.retrieve(task.id)
+
+            if task.status == "FAILED":
+                raise RuntimeError(f"Tarea fallida: {task.failure}")
+
+            video_url = task.output[0]
+            video_data = _req.get(video_url, timeout=60).content
+            with open(output_path, "wb") as f:
+                f.write(video_data)
+            return output_path
+        except Exception as exc:  # noqa: BLE001
+            return f"[Error al generar video con RunwayML: {exc}]"
+
+    return "[Error: se necesita GEMINI_API_KEY o RUNWAYML_API_KEY para generar videos.]"
+
+
 # ---------------------------------------------------------------------------
 # Registro público — ALL_TOOLS es lo que importa ai_agent.py
 # ---------------------------------------------------------------------------
@@ -722,4 +817,6 @@ ALL_TOOLS: list[Callable[..., str]] = [
     guardar_nota,
     # image_gen_tools
     generar_imagen,
+    # video_gen_tools
+    generar_video,
 ]

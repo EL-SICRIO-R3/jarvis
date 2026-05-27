@@ -183,6 +183,23 @@ OPENAI_TOOLS = [
             },
         },
     },
+    # ── video_gen_tools ───────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "generar_video",
+            "description": "Genera un video IA desde una descripción de texto y retorna la ruta del MP4 guardado.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "descripcion": {"type": "string", "description": "Descripción detallada del video a generar."},
+                    "duracion": {"type": "integer", "description": "Duración en segundos (por defecto 5, máximo 8-10)."},
+                    "estilo": {"type": "string", "description": "Estilo visual opcional (e.g. 'cinemático', 'animado', 'documental')."},
+                },
+                "required": ["descripcion"],
+            },
+        },
+    },
     # ── dev_tools ─────────────────────────────────────────────────────────
     {
         "type": "function",
@@ -320,6 +337,7 @@ Capacidades:
 - Capturar fotos con la webcam y analizarlas.
 - Tomar capturas de pantalla y analizarlas.
 - Generar imágenes con IA a partir de una descripción (DALL-E 3 / Imagen).
+- Generar videos con IA a partir de una descripción (Google Veo / RunwayML).
 - Liberar puertos TCP ocupados.
 - Mostrar el árbol de directorios de un proyecto.
 - Gestionar contenedores Docker (listar y reiniciar).
@@ -356,6 +374,9 @@ class JarvisAgent:
     # Herramientas que devuelven una ruta de imagen capturada o generada
     _VISION_CAPTURE_TOOLS = frozenset({"capturar_foto_webcam", "tomar_captura_pantalla", "generar_imagen"})
 
+    # Herramientas que devuelven una ruta de video generado
+    _VIDEO_GEN_TOOLS = frozenset({"generar_video"})
+
     # Herramientas que guardan archivos (resultado incluye la ruta absoluta)
     _SAVE_TOOLS = frozenset({"guardar_documento", "guardar_nota", "create_file"})
 
@@ -364,6 +385,7 @@ class JarvisAgent:
         self._history: list[dict] = []
         self.last_saved_path: Optional[str] = None          # leído por gui.py para ofrecer "abrir archivo"
         self.last_captured_image_path: Optional[str] = None  # leído por gui.py para mostrar preview
+        self.last_generated_video_path: Optional[str] = None  # leído por gui.py para mostrar preview de video
 
         if self._provider == "gemini":
             self._init_gemini()
@@ -446,6 +468,7 @@ class JarvisAgent:
             str: Respuesta textual final del asistente.
         """
         self.last_captured_image_path = None
+        self.last_generated_video_path = None
         if self._provider == "gemini":
             return self._send_gemini(user_message)
         return self._send_openai(user_message)
@@ -461,6 +484,7 @@ class JarvisAgent:
             str: Respuesta textual del asistente.
         """
         self.last_captured_image_path = None
+        self.last_generated_video_path = None
         if self._provider == "gemini":
             return self._send_gemini_with_image(user_message, image_path)
         # OpenAI vision fallback — si no hay soporte, degradar a texto
@@ -690,6 +714,11 @@ class JarvisAgent:
                             if os.path.isabs(candidate) and os.path.isfile(candidate):
                                 self.last_saved_path = candidate
                                 break
+            # Rastrear ruta de video generado (para el preview de gui.py)
+            if nombre in self._VIDEO_GEN_TOOLS:
+                _vpath = resultado.strip()
+                if not _vpath.startswith("[") and os.path.isfile(_vpath):
+                    self.last_generated_video_path = _vpath
             return resultado
         except TypeError as exc:
             return f"[Error de argumentos en '{nombre}': {exc}]"

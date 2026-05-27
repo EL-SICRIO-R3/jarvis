@@ -41,3 +41,7 @@ Pillow>=10.0.0
 
 # Drag-and-drop nativo de archivos en la ventana tkinter
 tkinterdnd2>=0.3.0
+
+# Generación de videos con RunwayML (requiere RUNWAYML_API_KEY)
+# Instalar manualmente si se desea usar RunwayML como proveedor de video:
+#   pip install runwayml>=1.0.0

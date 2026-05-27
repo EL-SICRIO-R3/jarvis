@@ -137,6 +137,10 @@ class JarvisWindow(_DND_BASE):
         self._capture_preview_t0: float    = 0.0
         self._capture_preview_rect         = None
 
+        self._video_preview_path: str | None = None  # ruta video generado
+        self._video_preview_t0: float        = 0.0
+        self._video_preview_rect             = None
+
         # ── Ajustes ──────────────────────────────────────────────────────────
         # Si hay clave de ElevenLabs, usar la primera voz de ElevenLabs por defecto
         self._selected_voice: str = (
@@ -682,6 +686,94 @@ class JarvisWindow(_DND_BASE):
         else:
             self._capture_preview_rect = None
 
+        # ── Preview video generado ────────────────────────────────────────────
+        if self._video_preview_path:
+            _VID_SHOW, _VID_FADE = 12.0, 3.0
+            _age = time.time() - self._video_preview_t0
+            if _age >= _VID_SHOW:
+                self._video_preview_path = None
+                self._video_preview_rect = None
+            else:
+                if _age < _VID_SHOW - _VID_FADE:
+                    _da = 1.0
+                else:
+                    _da = max(0.0, 1.0 - (_age - (_VID_SHOW - _VID_FADE)) / _VID_FADE)
+                _slide = int(18 * max(0.0, 1.0 - _age / 0.45))
+
+                _dpath = self._video_preview_path
+                _fname = os.path.basename(_dpath)
+                _dc    = lambda hx, a, _d=_da: self._blend(hx, a * _d)  # noqa: E731
+
+                _vw, _vh = 210, 82
+                # Desplazada arriba respecto a la tarjeta de captura para no superponerse
+                _vx1 = W - _vw - 12
+                _vy1 = H - _vh - 12 + _slide - (_vh + 8 if self._capture_preview_path else 0)
+                _vx2, _vy2 = _vx1 + _vw, _vy1 + _vh
+
+                # Sombra sólida exterior
+                c.create_rectangle(_vx1 - 4, _vy1 - 4, _vx2 + 4, _vy2 + 4,
+                                    fill="#000000", outline="")
+                # Triple glow (color azul-cian para diferenciar del preview de imagen)
+                _vcol = "#00BFFF"
+                for _g, _ga in ((5, 0.05), (3, 0.11), (1, 0.20)):
+                    c.create_rectangle(_vx1 - _g, _vy1 - _g, _vx2 + _g, _vy2 + _g,
+                                        outline=_dc(_vcol, _ga), width=1, fill="")
+                # Fondo oscuro
+                c.create_rectangle(_vx1, _vy1, _vx2, _vy2,
+                                    fill=self._blend("#090909", max(0.04, _da)), outline="")
+                # Borde
+                c.create_rectangle(_vx1, _vy1, _vx2, _vy2,
+                                    outline=_dc(_vcol, 0.38), width=1, fill="")
+                # Esquinas HUD
+                for _sx, _sy, _ddx, _ddy in (
+                    (_vx1, _vy1, +1, +1), (_vx2, _vy1, -1, +1),
+                    (_vx1, _vy2, +1, -1), (_vx2, _vy2, -1, -1),
+                ):
+                    c.create_line(_sx, _sy, _sx + _ddx * 10, _sy,
+                                  fill=_dc(_vcol, 0.90), width=2)
+                    c.create_line(_sx, _sy, _sx, _sy + _ddy * 10,
+                                  fill=_dc(_vcol, 0.90), width=2)
+
+                # Ícono de reproducción ▶
+                _icon_x = _vx1 + 18
+                _icon_y = _vy1 + _vh // 2
+                c.create_text(_icon_x, _icon_y, text="\u25b6",
+                              fill=_dc(_vcol, 0.85),
+                              font=("Helvetica Neue", 22))
+
+                # Nombre de archivo
+                _fn_s = _fname if len(_fname) <= 20 else _fname[:17] + "\u2026"
+                c.create_text(_vx1 + 44, _vy1 + 16, text=_fn_s, anchor="w",
+                              fill=_dc("#EEEEEE", 0.92),
+                              font=("Helvetica Neue", 10, "bold"))
+
+                # Subtítulo
+                c.create_text(_vx1 + 44, _vy1 + 30, text="Video generado",
+                              anchor="w",
+                              fill=_dc("#888888", 0.80),
+                              font=("Helvetica Neue", 8))
+
+                # Barra de tiempo restante
+                _pb_x = _vx1 + 8
+                _pb_y = _vy2 - 14
+                _pb_w = _vw - 16
+                _pb_p = max(0.0, 1.0 - _age / _VID_SHOW)
+                c.create_rectangle(_pb_x, _pb_y, _pb_x + _pb_w, _pb_y + 2,
+                                    fill=self._blend("#1A1A1A", max(0.04, _da)), outline="")
+                if _pb_p > 0:
+                    c.create_rectangle(_pb_x, _pb_y,
+                                        _pb_x + int(_pb_w * _pb_p), _pb_y + 2,
+                                        fill=_dc(_vcol, 0.50), outline="")
+
+                # Hint
+                c.create_text(_vx1 + _vw // 2, _vy2 - 4,
+                              text="\u00b7 clic para abrir \u00b7",
+                              fill=_dc(_vcol, 0.45),
+                              font=("Helvetica Neue", 8))
+                self._video_preview_rect = (_vx1, _vy1, _vx2, _vy2)
+        else:
+            self._video_preview_rect = None
+
     @staticmethod
     def _blend(hex_col: str, alpha: float) -> str:
         r = int(hex_col[1:3], 16)
@@ -724,6 +816,11 @@ class JarvisWindow(_DND_BASE):
             x1, y1, x2, y2 = self._capture_preview_rect
             if x1 <= event.x <= x2 and y1 <= event.y <= y2:
                 subprocess.Popen(["open", self._capture_preview_path])
+                return
+        if self._video_preview_rect and self._video_preview_path:
+            x1, y1, x2, y2 = self._video_preview_rect
+            if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                subprocess.Popen(["open", self._video_preview_path])
                 return
         self._interrupt()
 
@@ -795,6 +892,12 @@ class JarvisWindow(_DND_BASE):
         self._capture_preview_path = path
         self._capture_preview_t0   = time.time()
         self._capture_preview_rect = None
+
+    def _show_video_preview(self, path: str) -> None:
+        """Activa la tarjeta de preview de video generado."""
+        self._video_preview_path = path
+        self._video_preview_t0   = time.time()
+        self._video_preview_rect = None
     # ── Voz ────────────────────────────────────────────────────────────────────
     def _init_voice(self) -> None:
         def _setup() -> None:
@@ -986,6 +1089,12 @@ class JarvisWindow(_DND_BASE):
                 _cpath = self._agent.last_captured_image_path
                 self._agent.last_captured_image_path = None
                 self.after(0, lambda p=_cpath: self._show_capture_preview(p))
+
+            # ── Notificar video generado ──────────────────────────────────────
+            if self._agent and self._agent.last_generated_video_path:
+                _vpath = self._agent.last_generated_video_path
+                self._agent.last_generated_video_path = None
+                self.after(0, lambda p=_vpath: self._show_video_preview(p))
 
             self._show_response(f"Jarvis: {reply}")
             self._transition(_SPEAKING)
@@ -1249,6 +1358,10 @@ class JarvisWindow(_DND_BASE):
             _cpath = self._agent.last_captured_image_path
             self._agent.last_captured_image_path = None
             self.after(0, lambda p=_cpath: self._show_capture_preview(p))
+        if self._agent and self._agent.last_generated_video_path:
+            _vpath = self._agent.last_generated_video_path
+            self._agent.last_generated_video_path = None
+            self.after(0, lambda p=_vpath: self._show_video_preview(p))
         self._show_response(f"Jarvis: {reply}")
         self._transition(_SPEAKING)
         self._speak(reply)
