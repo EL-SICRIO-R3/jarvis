@@ -87,6 +87,7 @@ _ELEVEN_VOICES = [
 ]
 
 _ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY", "")
+_ELEVEN_VOICE_IDS: set[str] = {v for _, v in _ELEVEN_VOICES}  # búsqueda O(1)
 
 
 class _Particle:
@@ -149,6 +150,15 @@ class JarvisWindow(_DND_BASE):
         self._settings_win         = None
         self._bottom_frame         = None   # asignado en _build_ui
         self._btns_row             = None   # asignado en _build_ui
+
+        # ── Cliente ElevenLabs (inicializado una sola vez si hay API key) ──────
+        self._eleven_client = None
+        if _ELEVENLABS_API_KEY:
+            try:
+                from elevenlabs.client import ElevenLabs
+                self._eleven_client = ElevenLabs(api_key=_ELEVENLABS_API_KEY)
+            except Exception:
+                pass
 
         self._configure_window()
         self._build_ui()
@@ -1009,7 +1019,7 @@ class JarvisWindow(_DND_BASE):
     def _speak(self, text: str) -> None:
         chunk = text[:400]
         # Prioridad: ElevenLabs (si hay clave) → edge-tts (macOS) → pyttsx3
-        if _ELEVENLABS_API_KEY and self._selected_voice in {v for _, v in _ELEVEN_VOICES}:
+        if self._eleven_client and self._selected_voice in _ELEVEN_VOICE_IDS:
             self._speak_elevenlabs(chunk)
         elif _SO == "darwin":
             self._speak_neural(chunk)
@@ -1028,15 +1038,13 @@ class JarvisWindow(_DND_BASE):
         """TTS ultra-natural con ElevenLabs API. Fallback a edge-tts / say."""
         import tempfile
         try:
-            from elevenlabs.client import ElevenLabs
             from elevenlabs import VoiceSettings
         except ImportError:
             self._speak_neural(text)
             return
 
         try:
-            client = ElevenLabs(api_key=_ELEVENLABS_API_KEY)
-            audio_iter = client.text_to_speech.convert(
+            audio_iter = self._eleven_client.text_to_speech.convert(
                 voice_id=self._selected_voice,
                 text=text,
                 model_id="eleven_multilingual_v2",

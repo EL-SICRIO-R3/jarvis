@@ -110,7 +110,7 @@ GEMINI_API_KEY=tu_clave_aqui
 > **¿Dónde obtengo la clave?**
 > - Gemini: [Google AI Studio → API Keys](https://aistudio.google.com/app/apikey)
 > - OpenAI: [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-> - ElevenLabs: [elevenlabs.io/app/speech-synthesis](https://elevenlabs.io/app/speech-synthesis) → Profile → API Key
+> - ElevenLabs: [elevenlabs.io/app/settings/api-keys](https://elevenlabs.io/app/settings/api-keys)
 
 ---
 
