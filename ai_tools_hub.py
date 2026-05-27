@@ -674,7 +674,7 @@ def generar_imagen(descripcion: str, estilo: str = "") -> str:
 
             client = _ggenai.Client(api_key=gemini_key)
             response = client.models.generate_images(
-                model="imagen-3.0-generate-001",
+                model="imagen-4.0-generate-001",
                 prompt=prompt,
                 config=_ggenai_types.GenerateImagesConfig(number_of_images=1),
             )
