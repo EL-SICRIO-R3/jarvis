@@ -665,16 +665,22 @@ def generar_imagen(descripcion: str, estilo: str = "") -> str:
         except Exception as exc:  # noqa: BLE001
             return f"[Error al generar imagen con DALL-E 3: {exc}]"
 
-    # 2. Intentar con Google Imagen
+    # 2. Intentar con Google Imagen (requiere GEMINI_API_KEY de Google AI Studio)
     gemini_key = os.getenv("GEMINI_API_KEY")
     if gemini_key:
         try:
-            import google.generativeai as genai  # type: ignore
+            from google import genai as _ggenai  # type: ignore
+            from google.genai import types as _ggenai_types  # type: ignore
 
-            genai.configure(api_key=gemini_key)
-            model = genai.ImageGenerationModel("imagen-3.0-generate-001")
-            result = model.generate_images(prompt=prompt, number_of_images=1)
-            result.images[0].save(output_path)
+            client = _ggenai.Client(api_key=gemini_key)
+            response = client.models.generate_images(
+                model="imagen-3.0-generate-001",
+                prompt=prompt,
+                config=_ggenai_types.GenerateImagesConfig(number_of_images=1),
+            )
+            img_bytes = response.generated_images[0].image.image_bytes
+            with open(output_path, "wb") as f:
+                f.write(img_bytes)
             return output_path
         except Exception as exc:  # noqa: BLE001
             return f"[Error al generar imagen con Imagen: {exc}]"
