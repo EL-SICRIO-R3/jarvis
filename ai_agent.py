@@ -567,15 +567,25 @@ class JarvisAgent:
 
     def _send_gemini_with_image(self, user_message: str, image_path: str) -> str:
         """Envía texto + imagen a Gemini (visión multimodal)."""
+        import io
         import google.generativeai as genai  # type: ignore
         from PIL import Image  # type: ignore
 
         try:
             img = Image.open(image_path)
+            # Convertir a RGB si el modo no es compatible con JPEG (ej. RGBA, P, LA)
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG")
+            img_bytes = buf.getvalue()
         except Exception as exc:
             return f"[No se pudo abrir la imagen: {exc}]"
 
-        response = self._chat.send_message([user_message, img])
+        image_part = genai.protos.Part(
+            inline_data=genai.protos.Blob(mime_type="image/jpeg", data=img_bytes)
+        )
+        response = self._chat.send_message([user_message, image_part])
 
         # Ciclo de function calling (igual que _send_gemini)
         while True:
