@@ -315,13 +315,25 @@ def generar_imagen(descripcion: str, nombre_archivo: str = "") -> str:
         try:
             import google.generativeai as genai  # type: ignore
             genai.configure(api_key=gemini_key)
-            imagen = genai.ImageGenerationModel("imagen-3.0-generate-001")
+            _ImageGenModel = getattr(genai, "ImageGenerationModel", None)
+            if _ImageGenModel is None:
+                raise AttributeError(
+                    "ImageGenerationModel no disponible en esta versión del SDK."
+                )
+            imagen = _ImageGenModel("imagen-3.0-generate-001")
             result = imagen.generate_images(
                 prompt=descripcion,
                 number_of_images=1,
                 aspect_ratio="1:1",
             )
-            result.images[0].save(ruta)
+            img = result.images[0]
+            # Guardar: distintas versiones del SDK exponen el objeto de forma diferente
+            if hasattr(img, "save"):
+                img.save(ruta)
+            elif hasattr(img, "_pil_image"):
+                img._pil_image.save(ruta)
+            else:
+                raise RuntimeError("No se pudo guardar la imagen: formato desconocido.")
             return f"Imagen generada en: {ruta}"
         except Exception as exc:  # noqa: BLE001
             return f"[Error al generar imagen con Imagen: {exc}]"

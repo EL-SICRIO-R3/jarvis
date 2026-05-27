@@ -310,7 +310,7 @@ class JarvisAgent:
         return self._provider
 
     def reset_history(self) -> None:
-        """Reinicia el historial de conversación."""
+        """Reinicia el historial de conversación y limpia el estado de archivos guardados."""
         self._history = []
         self.last_saved_path = None
         self.last_generated_image = None
