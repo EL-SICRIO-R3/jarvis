@@ -661,8 +661,8 @@ class JarvisWindow(_DND_BASE):
         """Clic en canvas: cierra preview de imagen o interrumpe habla."""
         if self._widget_mode:
             # Registrar origen del arrastre y verificar botón restaurar
-            self._drag_x = event.x
-            self._drag_y = event.y
+            self._drag_x = event.x_root
+            self._drag_y = event.y_root
             if self._widget_restore_rect:
                 x1, y1, x2, y2 = self._widget_restore_rect
                 if x1 <= event.x <= x2 and y1 <= event.y <= y2:
@@ -1324,7 +1324,7 @@ class JarvisWindow(_DND_BASE):
             # Aplicar modo texto
             new_tm = text_var.get()
             if new_tm != self._text_mode:
-                self.after(0, lambda: self._set_text_mode(new_tm))
+                self._set_text_mode(new_tm)
             win.destroy()
             self._settings_win = None
 
@@ -1365,9 +1365,11 @@ class JarvisWindow(_DND_BASE):
         self.focus_force()
 
     def _widget_drag_move(self, event) -> None:
-        """Arrastra el widget por la pantalla."""
-        dx = event.x - self._drag_x
-        dy = event.y - self._drag_y
+        """Arrastra el widget por la pantalla (coordenadas absolutas de pantalla)."""
+        dx = event.x_root - self._drag_x
+        dy = event.y_root - self._drag_y
+        self._drag_x = event.x_root   # actualizar para el siguiente evento
+        self._drag_y = event.y_root
         x  = self.winfo_x() + dx
         y  = self.winfo_y() + dy
         self.geometry(f"+{x}+{y}")
