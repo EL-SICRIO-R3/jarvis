@@ -348,6 +348,7 @@ OPENAI_TOOLS = [
     },
 ]
 
+# Eight iterations allow normal tool chains while preventing provider-side loops.
 _MAX_TOOL_CALL_ITERATIONS = 8
 _GEMINI_EMPTY_RESPONSE = (
     "[El modelo terminó sin devolver texto. Intenta reformular la instrucción "
@@ -445,6 +446,7 @@ class JarvisAgent:
         self.last_saved_path: Optional[str] = None          # leído por gui.py para ofrecer "abrir archivo"
         self.last_captured_image_path: Optional[str] = None  # leído por gui.py para mostrar preview
         self.last_generated_video_path: Optional[str] = None  # leído por gui.py para mostrar preview de video
+        self.telegram_thread: threading.Thread | None = None
         self._pending_authorization: tuple[str, dict] | None = None
         self._lock = threading.RLock()
 
@@ -580,7 +582,7 @@ class JarvisAgent:
         import google.generativeai as genai  # type: ignore
 
         response = self._chat.send_message(user_message)
-        last_tool_result = ""
+        final_tool_result = ""
 
         # Ciclo de function calling
         # Ocho iteraciones cubren cadenas normales de tools sin permitir ciclos infinitos.
@@ -602,7 +604,7 @@ class JarvisAgent:
 
             for call in tool_calls:
                 resultado = self._execute_tool(call.name, dict(call.args))
-                last_tool_result = resultado
+                final_tool_result = resultado
                 tool_responses.append(
                     genai.protos.Part(
                         function_response=genai.protos.FunctionResponse(
@@ -629,7 +631,7 @@ class JarvisAgent:
             else:
                 response = self._chat.send_message(tool_responses)
 
-        return self._gemini_text(response, last_tool_result)
+        return self._gemini_text(response, final_tool_result)
 
     @staticmethod
     def _gemini_text(response: object, fallback: str = "") -> str:
@@ -671,7 +673,7 @@ class JarvisAgent:
         response = self._chat.send_message([user_message, image_part])
 
         # Ciclo de function calling (igual que _send_gemini)
-        last_tool_result = ""
+        final_tool_result = ""
         # Ocho iteraciones cubren cadenas normales de tools sin permitir ciclos infinitos.
         for _iteration in range(_MAX_TOOL_CALL_ITERATIONS):
             tool_calls = [
@@ -685,7 +687,7 @@ class JarvisAgent:
             tool_responses = []
             for call in tool_calls:
                 resultado = self._execute_tool(call.name, dict(call.args))
-                last_tool_result = resultado
+                final_tool_result = resultado
                 tool_responses.append(
                     genai.protos.Part(
                         function_response=genai.protos.FunctionResponse(
@@ -696,7 +698,7 @@ class JarvisAgent:
                 )
             response = self._chat.send_message(tool_responses)
 
-        return self._gemini_text(response, last_tool_result)
+        return self._gemini_text(response, final_tool_result)
 
     def _send_openai(self, user_message: str) -> str:
         """

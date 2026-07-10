@@ -41,6 +41,7 @@ class TelegramBridge:
         self.token = token or os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
         self.allowed_chat_ids = _allowed_chat_ids()
         self._stop_event: asyncio.Event | None = None
+        self._message_semaphore: asyncio.Semaphore | None = None
 
     async def handle_message(
         self, update: "Update", context: "ContextTypes.DEFAULT_TYPE"
@@ -61,7 +62,10 @@ class TelegramBridge:
             await message.reply_text("Historial reiniciado.")
             return
         try:
-            reply = await asyncio.to_thread(self.agent.send_message, text)
+            if self._message_semaphore is None:
+                raise RuntimeError("El puente de Telegram no está iniciado.")
+            async with self._message_semaphore:
+                reply = await asyncio.to_thread(self.agent.send_message, text)
         except (OSError, RuntimeError, ValueError) as exc:
             _LOGGER.exception("Error procesando mensaje de Telegram")
             reply = f"[Error procesando la instrucción: {exc}]"
@@ -103,6 +107,7 @@ class TelegramBridge:
         await application.start()
         await application.updater.start_polling()
         self._stop_event = asyncio.Event()
+        self._message_semaphore = asyncio.Semaphore(1)
         try:
             await self._stop_event.wait()
         finally:
@@ -123,5 +128,5 @@ def start_telegram_bot(agent: object) -> bool:
 
     thread = threading.Thread(target=_run, name="jarvis-telegram", daemon=True)
     thread.start()
-    agent._telegram_thread = thread  # type: ignore[attr-defined]
+    agent.telegram_thread = thread  # type: ignore[attr-defined]
     return True
