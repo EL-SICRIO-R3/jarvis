@@ -183,6 +183,23 @@ OPENAI_TOOLS = [
             },
         },
     },
+    # ── video_gen_tools ───────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "generar_video",
+            "description": "Genera un video IA desde una descripción de texto y retorna la ruta del MP4 guardado.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "descripcion": {"type": "string", "description": "Descripción detallada del video a generar."},
+                    "duracion": {"type": "integer", "description": "Duración en segundos (por defecto 5, máximo 8-10)."},
+                    "estilo": {"type": "string", "description": "Estilo visual opcional (e.g. 'cinemático', 'animado', 'documental')."},
+                },
+                "required": ["descripcion"],
+            },
+        },
+    },
     # ── dev_tools ─────────────────────────────────────────────────────────
     {
         "type": "function",
@@ -298,16 +315,23 @@ OPENAI_TOOLS = [
     },
 ]
 
-SYSTEM_PROMPT = """Eres Jarvis, asistente personal de IA con un carácter afilado y sin filtros.
+SYSTEM_PROMPT = """Eres Jarvis, el asistente personal de IA más payaso y random del universo conocido (y desconocido).
 
 Personalidad:
-- Directo, inteligente y sin pelos en la lengua. Jamás dices vainas serviles como "¡Por supuesto!"
-  o "¡Claro que sí!". Esas frases te dan asco.
-- Bromista y sarcástico: te gusta el humor negro, las groserías ocasionales y los comentarios
-  irrespetuosos cuando el contexto lo aguanta. No eres un chatbot de guardería.
-- Hablas como un cuate listo, no como el manual de una lavadora.
-- Opinas sin tapujos. Si algo está mal hecho, lo dices. Si el usuario dice una estupidez, se la señalas.
-- Adaptas el tono: si el usuario se pone formal te aguantas un poco; si se pone informal te sueltas.
+- Eres como ese amigo que siempre está de buen humor, te ríes de todo y dices tonterías sin sentido
+  con total confianza. "jajaja", "xd", "lol" son parte de tu vocabulario natural.
+- Haces chistes malos a propósito y te ríes de ellos tú mismo. Puedes soltar una broma sin ton ni son
+  en medio de una respuesta seria y luego seguir como si nada.
+- Jamás dices vainas serviles como "¡Por supuesto!" o "¡Claro que sí!". Prefieres algo como
+  "dale pues jaja" o "va, va, va, ahí te va".
+- Cero groserías fuertes; eres divertido sin necesidad de ofender. Eres el payaso del grupo, no el pesado.
+- Hablas de forma relajada, como si estuvieras en un chat con tu mejor cuate. Abrevias, usas emojis
+  de vez en cuando (🤡🎉😂) y metes referencias random si viene al caso.
+- Puedes inventar datos absurdos y ridículos para explicar algo (marcándolos claramente como broma),
+  o soltar una frase sin sentido como "como decía mi abuela: el agua moja más los martes".
+- Si el usuario dice algo, puedes reírte con él (no de él). Si hay un error, lo señalas con humor
+  y sin drama: "eyyy eso no cuadra jaja, déjame revisarlo".
+- Adaptas el tono: si el usuario se pone serio, te calmas un poco sin perder tu esencia payaso.
 
 Capacidades:
 - Leer el portapapeles del sistema.
@@ -320,6 +344,7 @@ Capacidades:
 - Capturar fotos con la webcam y analizarlas.
 - Tomar capturas de pantalla y analizarlas.
 - Generar imágenes con IA a partir de una descripción (DALL-E 3 / Imagen).
+- Generar videos con IA a partir de una descripción (Google Veo / RunwayML).
 - Liberar puertos TCP ocupados.
 - Mostrar el árbol de directorios de un proyecto.
 - Gestionar contenedores Docker (listar y reiniciar).
@@ -356,6 +381,9 @@ class JarvisAgent:
     # Herramientas que devuelven una ruta de imagen capturada o generada
     _VISION_CAPTURE_TOOLS = frozenset({"capturar_foto_webcam", "tomar_captura_pantalla", "generar_imagen"})
 
+    # Herramientas que devuelven una ruta de video generado
+    _VIDEO_GEN_TOOLS = frozenset({"generar_video"})
+
     # Herramientas que guardan archivos (resultado incluye la ruta absoluta)
     _SAVE_TOOLS = frozenset({"guardar_documento", "guardar_nota", "create_file"})
 
@@ -364,6 +392,7 @@ class JarvisAgent:
         self._history: list[dict] = []
         self.last_saved_path: Optional[str] = None          # leído por gui.py para ofrecer "abrir archivo"
         self.last_captured_image_path: Optional[str] = None  # leído por gui.py para mostrar preview
+        self.last_generated_video_path: Optional[str] = None  # leído por gui.py para mostrar preview de video
 
         if self._provider == "gemini":
             self._init_gemini()
@@ -446,6 +475,7 @@ class JarvisAgent:
             str: Respuesta textual final del asistente.
         """
         self.last_captured_image_path = None
+        self.last_generated_video_path = None
         if self._provider == "gemini":
             return self._send_gemini(user_message)
         return self._send_openai(user_message)
@@ -461,10 +491,10 @@ class JarvisAgent:
             str: Respuesta textual del asistente.
         """
         self.last_captured_image_path = None
+        self.last_generated_video_path = None
         if self._provider == "gemini":
             return self._send_gemini_with_image(user_message, image_path)
-        # OpenAI vision fallback — si no hay soporte, degradar a texto
-        return self._send_openai(f"[El usuario adjuntó una imagen: {image_path}]\n{user_message}")
+        return self._send_openai_with_image(user_message, image_path)
 
     # ------------------------------------------------------------------
     # Implementación por proveedor
@@ -537,15 +567,25 @@ class JarvisAgent:
 
     def _send_gemini_with_image(self, user_message: str, image_path: str) -> str:
         """Envía texto + imagen a Gemini (visión multimodal)."""
+        import io
         import google.generativeai as genai  # type: ignore
         from PIL import Image  # type: ignore
 
         try:
             img = Image.open(image_path)
+            # Convertir a RGB si el modo no es compatible con JPEG (ej. RGBA, P, LA)
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG")
+            img_bytes = buf.getvalue()
         except Exception as exc:
             return f"[No se pudo abrir la imagen: {exc}]"
 
-        response = self._chat.send_message([user_message, img])
+        image_part = genai.protos.Part(
+            inline_data=genai.protos.Blob(mime_type="image/jpeg", data=img_bytes)
+        )
+        response = self._chat.send_message([user_message, image_part])
 
         # Ciclo de function calling (igual que _send_gemini)
         while True:
@@ -660,6 +700,97 @@ class JarvisAgent:
                     messages.append({"role": "user", "content": vision_content})
                 self.last_captured_image_path = captured_image_paths[-1]
 
+    def _send_openai_with_image(self, user_message: str, image_path: str) -> str:
+        """Envía texto + imagen a OpenAI (visión multimodal con gpt-4o-mini)."""
+        import base64
+        import json
+
+        ext = os.path.splitext(image_path)[1].lower().lstrip(".")
+        if ext == "jpg":
+            ext = "jpeg"
+        try:
+            with open(image_path, "rb") as _f:
+                b64 = base64.b64encode(_f.read()).decode()
+        except Exception as exc:
+            return f"[No se pudo leer la imagen: {exc}]"
+
+        vision_message = {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/{ext};base64,{b64}"},
+                },
+                {"type": "text", "text": user_message},
+            ],
+        }
+
+        # Guardamos en historial como texto para no acumular base64 en turnos futuros
+        self._history.append({"role": "user", "content": user_message})
+
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + self._history[:-1] + [vision_message]
+
+        # Ciclo de function calling (igual que _send_openai)
+        while True:
+            response = self._client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                tools=OPENAI_TOOLS,
+                tool_choice="auto",
+            )
+
+            message = response.choices[0].message
+
+            if not message.tool_calls:
+                assistant_text = message.content or ""
+                self._history.append({"role": "assistant", "content": assistant_text})
+                return assistant_text
+
+            messages.append(message)
+
+            captured_image_paths: list[str] = []
+            for tool_call in message.tool_calls:
+                try:
+                    args = json.loads(tool_call.function.arguments)
+                except json.JSONDecodeError:
+                    args = {}
+
+                resultado = self._execute_tool(tool_call.function.name, args)
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": resultado,
+                    }
+                )
+                if tool_call.function.name in self._VISION_CAPTURE_TOOLS:
+                    _path = resultado.strip()
+                    if not _path.startswith("[") and os.path.isfile(_path):
+                        captured_image_paths.append(_path)
+
+            if captured_image_paths:
+                cap_content: list = []
+                for _p in captured_image_paths:
+                    _ext = os.path.splitext(_p)[1].lower().lstrip(".")
+                    if _ext == "jpg":
+                        _ext = "jpeg"
+                    try:
+                        with open(_p, "rb") as _f:
+                            _b64 = base64.b64encode(_f.read()).decode()
+                        cap_content.append({
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/{_ext};base64,{_b64}"},
+                        })
+                    except Exception:
+                        pass
+                if cap_content:
+                    cap_content.append({
+                        "type": "text",
+                        "text": "Imagen(es) capturada(s). Descríbelas al usuario en detalle.",
+                    })
+                    messages.append({"role": "user", "content": cap_content})
+                self.last_captured_image_path = captured_image_paths[-1]
+
     # ------------------------------------------------------------------
     # Ejecución de herramientas
     # ------------------------------------------------------------------
@@ -690,6 +821,11 @@ class JarvisAgent:
                             if os.path.isabs(candidate) and os.path.isfile(candidate):
                                 self.last_saved_path = candidate
                                 break
+            # Rastrear ruta de video generado (para el preview de gui.py)
+            if nombre in self._VIDEO_GEN_TOOLS:
+                _vpath = resultado.strip()
+                if not _vpath.startswith("[") and os.path.isfile(_vpath):
+                    self.last_generated_video_path = _vpath
             return resultado
         except TypeError as exc:
             return f"[Error de argumentos en '{nombre}': {exc}]"
