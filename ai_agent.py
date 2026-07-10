@@ -16,6 +16,7 @@ Variables de entorno necesarias (al menos una):
 from __future__ import annotations
 
 import os
+import re
 from typing import Callable, Optional
 
 from ai_tools_hub import ALL_TOOLS
@@ -313,6 +314,37 @@ OPENAI_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "configurar_ruta_imagenes",
+            "description": "Cambia la carpeta persistente donde se guardan imágenes. Requiere autorización del usuario.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ruta": {"type": "string", "description": "Ruta absoluta o iniciada por ~."},
+                    "autorizado": {"type": "boolean", "description": "No se usa para conceder permisos; Jarvis solicita confirmación aparte."},
+                },
+                "required": ["ruta"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "crear_tool",
+            "description": "Crea una nueva tool Python para cargarla al reiniciar. Requiere autorización del usuario.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "nombre": {"type": "string", "description": "Nombre de función Python."},
+                    "codigo": {"type": "string", "description": "Código completo de la función."},
+                    "autorizado": {"type": "boolean", "description": "No se usa para conceder permisos; Jarvis solicita confirmación aparte."},
+                },
+                "required": ["nombre", "codigo"],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = """Eres Jarvis, el asistente personal de IA más payaso y random del universo conocido (y desconocido).
@@ -352,6 +384,10 @@ Capacidades:
 - Analizar las últimas líneas de un archivo de log.
 - Mostrar notificaciones nativas del sistema operativo.
 - Redactar borradores de correo en el cliente de email.
+- Configurarse cuando el usuario lo solicite: primero pide los datos que falten y
+  solicita autorización explícita antes de cambiar rutas, crear tools o ejecutar
+  cambios que alteren su comportamiento. Nunca trates un parámetro del modelo
+  como autorización; la confirmación debe venir del usuario.
 
 Reglas operativas:
 1. Responde en el idioma del usuario (normalmente español).
@@ -386,6 +422,7 @@ class JarvisAgent:
 
     # Herramientas que guardan archivos (resultado incluye la ruta absoluta)
     _SAVE_TOOLS = frozenset({"guardar_documento", "guardar_nota", "create_file"})
+    _AUTHORIZED_TOOLS = frozenset({"configurar_ruta_imagenes", "crear_tool"})
 
     def __init__(self, provider: Optional[str] = None) -> None:
         self._provider = self._resolve_provider(provider)
@@ -393,6 +430,7 @@ class JarvisAgent:
         self.last_saved_path: Optional[str] = None          # leído por gui.py para ofrecer "abrir archivo"
         self.last_captured_image_path: Optional[str] = None  # leído por gui.py para mostrar preview
         self.last_generated_video_path: Optional[str] = None  # leído por gui.py para mostrar preview de video
+        self._pending_authorization: tuple[str, dict] | None = None
 
         if self._provider == "gemini":
             self._init_gemini()
@@ -476,6 +514,17 @@ class JarvisAgent:
         """
         self.last_captured_image_path = None
         self.last_generated_video_path = None
+        if self._pending_authorization is not None:
+            if re.search(r"\b(s[ií]|autorizo|acepto|confirmo|adelante)\b", user_message.lower()):
+                nombre, args = self._pending_authorization
+                self._pending_authorization = None
+                return self._execute_tool(
+                    nombre, {**args, "autorizado": True}, _authorized=True
+                )
+            if re.search(r"\b(no|cancelar|cancelo|rechazo)\b", user_message.lower()):
+                self._pending_authorization = None
+                return "Cambio cancelado; no se modificó la configuración."
+            return "Necesito que confirmes o rechaces la autorización pendiente."
         if self._provider == "gemini":
             return self._send_gemini(user_message)
         return self._send_openai(user_message)
@@ -795,7 +844,7 @@ class JarvisAgent:
     # Ejecución de herramientas
     # ------------------------------------------------------------------
 
-    def _execute_tool(self, nombre: str, args: dict) -> str:
+    def _execute_tool(self, nombre: str, args: dict, _authorized: bool = False) -> str:
         """
         Busca y ejecuta una herramienta local por nombre.
 
@@ -809,6 +858,13 @@ class JarvisAgent:
         func = TOOLS_MAP.get(nombre)
         if func is None:
             return f"[Herramienta '{nombre}' no encontrada.]"
+        if nombre in self._AUTHORIZED_TOOLS and not _authorized:
+            pending_args = {key: value for key, value in args.items() if key != "autorizado"}
+            self._pending_authorization = (nombre, pending_args)
+            return (
+                f"[AUTORIZACIÓN REQUERIDA para '{nombre}'. "
+                "Explica al usuario qué se cambiará y espera su confirmación explícita.]"
+            )
         try:
             resultado = str(func(**args))
             # Rastrear ruta cuando se guarda un archivo (para el preview de gui.py)
