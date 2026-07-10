@@ -1234,7 +1234,16 @@ class JarvisWindow(_DND_BASE):
                     ),
                 ),
             )
-            audio_data = response.candidates[0].content.parts[0].inline_data.data
+            candidates = getattr(response, "candidates", None)
+            if not candidates:
+                return False
+            parts = getattr(getattr(candidates[0], "content", None), "parts", None)
+            if not parts:
+                return False
+            inline_data = getattr(parts[0], "inline_data", None)
+            audio_data = getattr(inline_data, "data", None)
+            if not audio_data:
+                return False
             if isinstance(audio_data, str):
                 audio_data = base64.b64decode(audio_data)
 
@@ -1284,6 +1293,7 @@ class JarvisWindow(_DND_BASE):
             async def _gen():
                 comm = edge_tts.Communicate(
                     text,
+                    # Si Gemini falla, conservar una voz Edge válida para el fallback.
                     (
                         self._selected_voice
                         if not self._selected_voice.startswith("gemini:")
