@@ -347,6 +347,13 @@ OPENAI_TOOLS = [
     },
 ]
 
+_AUTH_CONFIRM_RE = re.compile(
+    r"^\s*(?:s[ií]|autorizo|acepto|confirmo|adelante)(?:\s|[.!,:;]|$)"
+)
+_AUTH_REJECT_RE = re.compile(
+    r"^\s*(?:no\s+(?:autorizo|quiero|lo hagas)|cancel(?:ar|o)|rechazo)(?:\s|[.!,:;]|$)"
+)
+
 SYSTEM_PROMPT = """Eres Jarvis, el asistente personal de IA más payaso y random del universo conocido (y desconocido).
 
 Personalidad:
@@ -516,19 +523,13 @@ class JarvisAgent:
         self.last_captured_image_path = None
         self.last_generated_video_path = None
         if self._pending_authorization is not None:
-            if re.match(
-                r"^\s*(?:s[ií]|autorizo|acepto|confirmo|adelante)(?:\s|[.!,:;]|$)",
-                user_message.lower(),
-            ):
+            if _AUTH_CONFIRM_RE.match(user_message.lower()):
                 nombre, args = self._pending_authorization
                 self._pending_authorization = None
                 return self._execute_tool(
                     nombre, {**args, self._AUTHORIZATION_KEY: True}, _authorized=True
                 )
-            if re.match(
-                r"^\s*(?:no\s+(?:autorizo|quiero|lo hagas)|cancel(?:ar|o)|rechazo)(?:\s|[.!,:;]|$)",
-                user_message.lower(),
-            ):
+            if _AUTH_REJECT_RE.match(user_message.lower()):
                 self._pending_authorization = None
                 return "Cambio cancelado; no se modificó la configuración."
             return "Necesito que confirmes o rechaces la autorización pendiente."
