@@ -62,7 +62,7 @@ def configurar_ruta_imagenes(ruta: str, autorizado: bool = False) -> str:
     """Cambia la carpeta de imágenes; requiere confirmación explícita del usuario."""
     if not autorizado:
         return "[AUTORIZACIÓN REQUERIDA: cambiar la carpeta de imágenes modifica el comportamiento de Jarvis.]"
-    destino = Path(os.path.expanduser(ruta)).expanduser()
+    destino = Path(os.path.expanduser(ruta))
     if not destino.is_absolute():
         return "[Error: la ruta debe ser absoluta o empezar por ~.]"
     try:

@@ -323,7 +323,7 @@ OPENAI_TOOLS = [
                 "type": "object",
                 "properties": {
                     "ruta": {"type": "string", "description": "Ruta absoluta o iniciada por ~."},
-                    "autorizado": {"type": "boolean", "description": "No se usa para conceder permisos; Jarvis solicita confirmación aparte."},
+                    "autorizado": {"type": "boolean", "description": "Parámetro interno; solo se activa después de la confirmación del usuario."},
                 },
                 "required": ["ruta"],
             },
@@ -339,7 +339,7 @@ OPENAI_TOOLS = [
                 "properties": {
                     "nombre": {"type": "string", "description": "Nombre de función Python."},
                     "codigo": {"type": "string", "description": "Código completo de la función."},
-                    "autorizado": {"type": "boolean", "description": "No se usa para conceder permisos; Jarvis solicita confirmación aparte."},
+                    "autorizado": {"type": "boolean", "description": "Parámetro interno; solo se activa después de la confirmación del usuario."},
                 },
                 "required": ["nombre", "codigo"],
             },
@@ -515,13 +515,19 @@ class JarvisAgent:
         self.last_captured_image_path = None
         self.last_generated_video_path = None
         if self._pending_authorization is not None:
-            if re.search(r"\b(s[ií]|autorizo|acepto|confirmo|adelante)\b", user_message.lower()):
+            if re.match(
+                r"^\s*(?:s[ií]|autorizo|acepto|confirmo|adelante)(?:\s|[.!,:;]|$)",
+                user_message.lower(),
+            ):
                 nombre, args = self._pending_authorization
                 self._pending_authorization = None
                 return self._execute_tool(
                     nombre, {**args, "autorizado": True}, _authorized=True
                 )
-            if re.search(r"\b(no|cancelar|cancelo|rechazo)\b", user_message.lower()):
+            if re.match(
+                r"^\s*(?:no\s+(?:autorizo|quiero|lo hagas)|cancel(?:ar|o)|rechazo)(?:\s|[.!,:;]|$)",
+                user_message.lower(),
+            ):
                 self._pending_authorization = None
                 return "Cambio cancelado; no se modificó la configuración."
             return "Necesito que confirmes o rechaces la autorización pendiente."
