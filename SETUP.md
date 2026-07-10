@@ -143,7 +143,9 @@ python -m pip install -r requirements.txt
 
 En macOS instalado desde python.org, ejecuta también `Install
 Certificates.command`, incluido normalmente en `/Applications/Python 3.x/`
-(sustituye `3.x` por tu versión instalada), y vuelve a iniciar Jarvis.
+(sustituye `3.x` por tu versión instalada). Este comando instala los
+certificados raíz necesarios para validar conexiones HTTPS; después, vuelve a
+iniciar Jarvis.
 
 Al arrancar verás en la terminal:
 
