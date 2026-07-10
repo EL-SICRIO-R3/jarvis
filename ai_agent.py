@@ -380,7 +380,12 @@ _MOOD_PATTERNS = {
 
 
 def detect_mood(message: str) -> str:
-    """Detecta el tono dominante del mensaje sin enviar datos a un servicio externo."""
+    """Detecta el tono dominante del mensaje sin enviar datos a un servicio externo.
+
+    Returns:
+        Uno de ``neutral``, ``triste``, ``frustrado``, ``alegre``, ``urgente``
+        o ``cansado``.
+    """
     normalized = message.lower()
     scores = {
         mood: sum(
@@ -411,7 +416,7 @@ def _mood_context(mood: str) -> str:
         "cansado": "Sé especialmente breve, claro y amable; no sobrecargues al usuario.",
         "neutral": "Mantén tu personalidad habitual y ajusta el tono al contexto de la conversación.",
     }
-    return instructions[mood]
+    return instructions.get(mood, instructions["neutral"])
 
 
 def _contextualize_message(message: str, mood: str) -> str:
@@ -584,7 +589,7 @@ class JarvisAgent:
         return self._current_mood
 
     def _contextualize_user_message(self, message: str) -> str:
-        """Detecta el tono y prepara el mensaje para el proveedor LLM."""
+        """Detecta el tono, actualiza ``_current_mood`` y prepara el mensaje."""
         self._current_mood = detect_mood(message)
         return _contextualize_message(message, self._current_mood)
 
