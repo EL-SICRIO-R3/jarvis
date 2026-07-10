@@ -54,6 +54,27 @@ def _video_dir() -> Path:
     return video_dir
 
 
+_VEO_SUPPORTED_DURATIONS = (4, 6, 8)
+
+
+def _extract_generated_video_bytes(operation) -> bytes:
+    """Extrae bytes de respuestas ``response`` y ``result`` del SDK de Veo."""
+    result = getattr(operation, "response", None)
+    if result is None:
+        result = getattr(operation, "result", None)
+    generated_videos = getattr(result, "generated_videos", None)
+    if not generated_videos:
+        raise RuntimeError("La API no devolvió ningún video.")
+
+    video = generated_videos[0].video
+    video_bytes = getattr(video, "video_bytes", None)
+    if video_bytes is None:
+        video_bytes = getattr(video, "video", None)
+    if video_bytes is None:
+        raise RuntimeError("La API no devolvió los datos del video.")
+    return video_bytes
+
+
 # ---------------------------------------------------------------------------
 # system_tools
 # ---------------------------------------------------------------------------
@@ -713,6 +734,10 @@ def generar_video(descripcion: str, duracion: int = 5, estilo: str = "") -> str:
     import time as _time
 
     prompt = f"{descripcion}. Estilo: {estilo}" if estilo.strip() else descripcion
+    try:
+        requested_duration = int(duracion)
+    except (TypeError, ValueError):
+        return "[Error: la duración del video debe ser un número entero.]"
     ts = int(_time.time() * 1_000_000)
     output_path = str(_video_dir() / f"video_{ts}.mp4")
 
@@ -725,7 +750,8 @@ def generar_video(descripcion: str, duracion: int = 5, estilo: str = "") -> str:
 
             client = _ggenai.Client(api_key=gemini_key)
             veo_duration = min(
-                [4, 6, 8], key=lambda supported: abs(supported - requested_duration)
+                _VEO_SUPPORTED_DURATIONS,
+                key=lambda supported: abs(supported - requested_duration),
             )
             operation = client.models.generate_videos(
                 model=os.getenv("GEMINI_VIDEO_MODEL", "veo-3.1-fast-generate-preview"),
@@ -746,18 +772,7 @@ def generar_video(descripcion: str, duracion: int = 5, estilo: str = "") -> str:
             if operation.error:
                 raise RuntimeError(str(operation.error))
 
-            result = getattr(operation, "response", None)
-            if result is None:
-                result = getattr(operation, "result", None)
-            generated_videos = getattr(result, "generated_videos", None)
-            if not generated_videos:
-                raise RuntimeError("La API no devolvió ningún video.")
-            video = generated_videos[0].video
-            video_bytes = getattr(video, "video_bytes", None)
-            if video_bytes is None:
-                video_bytes = getattr(video, "video", None)
-            if video_bytes is None:
-                raise RuntimeError("La API no devolvió los datos del video.")
+            video_bytes = _extract_generated_video_bytes(operation)
             with open(output_path, "wb") as f:
                 f.write(video_bytes)
             return output_path
