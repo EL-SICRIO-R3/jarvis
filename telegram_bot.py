@@ -27,7 +27,9 @@ def _allowed_chat_ids() -> set[int]:
             if value.strip():
                 result.add(int(value.strip()))
         except ValueError:
-            _LOGGER.warning("Se ignoró un TELEGRAM_ALLOWED_CHAT_IDS inválido.")
+            _LOGGER.warning(
+                "Se ignoró un TELEGRAM_ALLOWED_CHAT_IDS inválido: %s", value.strip()
+            )
     return result
 
 
@@ -38,6 +40,7 @@ class TelegramBridge:
         self.agent = agent
         self.token = token or os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
         self.allowed_chat_ids = _allowed_chat_ids()
+        self._stop_event: asyncio.Event | None = None
 
     async def handle_message(
         self, update: "Update", context: "ContextTypes.DEFAULT_TYPE"
@@ -99,8 +102,9 @@ class TelegramBridge:
         await application.initialize()
         await application.start()
         await application.updater.start_polling()
+        self._stop_event = asyncio.Event()
         try:
-            await asyncio.Event().wait()
+            await self._stop_event.wait()
         finally:
             await application.updater.stop()
             await application.stop()

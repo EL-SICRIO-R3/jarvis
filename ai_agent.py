@@ -349,6 +349,10 @@ OPENAI_TOOLS = [
 ]
 
 _MAX_TOOL_CALL_ITERATIONS = 8
+_GEMINI_EMPTY_RESPONSE = (
+    "[El modelo terminó sin devolver texto. Intenta reformular la instrucción "
+    "o verifica la conexión con el modelo.]"
+)
 
 _AUTH_CONFIRM_RE = re.compile(
     r"^\s*(?:s[ií]|autorizo|acepto|confirmo|adelante)(?:\s|[.!,:;]|$)"
@@ -579,7 +583,7 @@ class JarvisAgent:
         last_tool_result = ""
 
         # Ciclo de function calling
-        # Evita ciclos infinitos si el proveedor insiste en llamar tools.
+        # Ocho iteraciones cubren cadenas normales de tools sin permitir ciclos infinitos.
         for _iteration in range(_MAX_TOOL_CALL_ITERATIONS):
             # Recolectar todas las llamadas a herramientas de la respuesta
             tool_calls = [
@@ -642,7 +646,7 @@ class JarvisAgent:
                 part_text = str(getattr(part, "text", "") or "").strip()
                 if part_text:
                     return part_text
-        return fallback or "[El modelo terminó sin devolver texto. Intenta reformular la instrucción o verifica la conexión con el modelo.]"
+        return fallback or _GEMINI_EMPTY_RESPONSE
 
     def _send_gemini_with_image(self, user_message: str, image_path: str) -> str:
         """Envía texto + imagen a Gemini (visión multimodal)."""
@@ -668,7 +672,7 @@ class JarvisAgent:
 
         # Ciclo de function calling (igual que _send_gemini)
         last_tool_result = ""
-        # Evita ciclos infinitos si el proveedor insiste en llamar tools.
+        # Ocho iteraciones cubren cadenas normales de tools sin permitir ciclos infinitos.
         for _iteration in range(_MAX_TOOL_CALL_ITERATIONS):
             tool_calls = [
                 part.function_call
