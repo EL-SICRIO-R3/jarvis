@@ -1255,6 +1255,10 @@ class JarvisWindow(_DND_BASE):
                 return False
             if isinstance(audio_data, str):
                 audio_data = base64.b64decode(audio_data)
+            elif isinstance(audio_data, bytearray):
+                audio_data = bytes(audio_data)
+            elif not isinstance(audio_data, bytes):
+                return False
 
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
                 self._tts_tmpfile = f.name
@@ -1298,16 +1302,17 @@ class JarvisWindow(_DND_BASE):
 
             mood = getattr(self._agent, "current_mood", "neutral")
             prosody = _MOOD_PROSODY.get(mood, _MOOD_PROSODY["neutral"])
+            edge_voice = (
+                self._selected_voice
+                if not self._selected_voice.startswith("gemini:")
+                else _LOCAL_VOICES[0][1]
+            )
 
             async def _gen():
                 comm = edge_tts.Communicate(
                     text,
                     # Si Gemini falla, conservar una voz Edge válida para el fallback.
-                    (
-                        self._selected_voice
-                        if not self._selected_voice.startswith("gemini:")
-                        else _LOCAL_VOICES[0][1]
-                    ),
+                    edge_voice,
                     rate=prosody[0],
                     pitch=prosody[1],
                 )
