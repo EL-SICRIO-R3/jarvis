@@ -363,11 +363,11 @@ _AUTH_REJECT_RE = re.compile(
 )
 
 _MOOD_KEYWORDS = {
-    "triste": ("triste", "deprimid", "llor", "solo", "mal día", "mal dia", "pena"),
-    "frustrado": ("frustr", "hart", "desesper", "enoj", "cabre", "error"),
-    "alegre": ("feliz", "content", "genial", "increíble", "increible", "jaja", "gracias"),
+    "triste": ("triste", "deprimido", "deprimida", "lloro", "llorar", "solo", "mal día", "mal dia", "pena"),
+    "frustrado": ("frustrado", "frustrada", "frustración", "frustracion", "harto", "harta", "desesperado", "enojado", "cabreado", "error"),
+    "alegre": ("feliz", "contento", "contenta", "genial", "increíble", "increible", "jaja", "gracias"),
     "urgente": ("urgente", "rápido", "rapido", "ya mismo", "emergencia", "asap"),
-    "cansado": ("cansad", "agotad", "sueño", "sueno", "no puedo más", "no puedo mas"),
+    "cansado": ("cansado", "cansada", "agotado", "agotada", "sueño", "sueno", "no puedo más", "no puedo mas"),
 }
 _MOOD_PRIORITY = ("urgente", "frustrado", "triste", "cansado", "alegre")
 _MOOD_PATTERNS = {
@@ -604,18 +604,18 @@ class JarvisAgent:
             str: Respuesta textual final del asistente.
         """
         with self._lock:
-            original_message = user_message
+            auth_check_message = user_message
             contextualized_message = self._contextualize_user_message(user_message)
             self.last_captured_image_path = None
             self.last_generated_video_path = None
             if self._pending_authorization is not None:
-                if _AUTH_CONFIRM_RE.match(original_message.lower()):
+                if _AUTH_CONFIRM_RE.match(auth_check_message.lower()):
                     nombre, args = self._pending_authorization
                     self._pending_authorization = None
                     return self._execute_tool(
                         nombre, {**args, self._AUTHORIZATION_KEY: True}, _authorized=True
                     )
-                if _AUTH_REJECT_RE.match(original_message.lower()):
+                if _AUTH_REJECT_RE.match(auth_check_message.lower()):
                     self._pending_authorization = None
                     return "Cambio cancelado; no se modificó la configuración."
                 return "Necesito que confirmes o rechaces la autorización pendiente."

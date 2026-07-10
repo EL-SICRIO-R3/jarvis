@@ -73,6 +73,7 @@ _LOCAL_VOICES = [                      # voces disponibles en la configuración 
     ("Tomás · Argentina (Neural)", "es-AR-TomasNeural"),
 ]
 _MOOD_PROSODY = {
+    # Cambios suaves para reflejar el tono sin volver la voz artificial o estridente.
     "alegre": ("+8%", "+10Hz"),
     "triste": ("-8%", "-10Hz"),
     "frustrado": ("+3%", "+0Hz"),
