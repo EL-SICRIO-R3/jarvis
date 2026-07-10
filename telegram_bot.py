@@ -26,7 +26,7 @@ try:
 except ImportError:
     _LOGGER.warning(
         "No se pudo cargar truststore; en macOS podrían aparecer "
-        "errores SSL. Instálalo con: python -m pip install truststore"
+        "errores SSL. Ejecuta: python -m pip install -r requirements.txt"
     )
 
 
