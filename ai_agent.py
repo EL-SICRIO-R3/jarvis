@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 from typing import Callable, Optional
 
 from ai_tools_hub import ALL_TOOLS
@@ -439,6 +440,7 @@ class JarvisAgent:
         self.last_captured_image_path: Optional[str] = None  # leído por gui.py para mostrar preview
         self.last_generated_video_path: Optional[str] = None  # leído por gui.py para mostrar preview de video
         self._pending_authorization: tuple[str, dict] | None = None
+        self._lock = threading.RLock()
 
         if self._provider == "gemini":
             self._init_gemini()
@@ -520,22 +522,23 @@ class JarvisAgent:
         Returns:
             str: Respuesta textual final del asistente.
         """
-        self.last_captured_image_path = None
-        self.last_generated_video_path = None
-        if self._pending_authorization is not None:
-            if _AUTH_CONFIRM_RE.match(user_message.lower()):
-                nombre, args = self._pending_authorization
-                self._pending_authorization = None
-                return self._execute_tool(
-                    nombre, {**args, self._AUTHORIZATION_KEY: True}, _authorized=True
-                )
-            if _AUTH_REJECT_RE.match(user_message.lower()):
-                self._pending_authorization = None
-                return "Cambio cancelado; no se modificó la configuración."
-            return "Necesito que confirmes o rechaces la autorización pendiente."
-        if self._provider == "gemini":
-            return self._send_gemini(user_message)
-        return self._send_openai(user_message)
+        with self._lock:
+            self.last_captured_image_path = None
+            self.last_generated_video_path = None
+            if self._pending_authorization is not None:
+                if _AUTH_CONFIRM_RE.match(user_message.lower()):
+                    nombre, args = self._pending_authorization
+                    self._pending_authorization = None
+                    return self._execute_tool(
+                        nombre, {**args, self._AUTHORIZATION_KEY: True}, _authorized=True
+                    )
+                if _AUTH_REJECT_RE.match(user_message.lower()):
+                    self._pending_authorization = None
+                    return "Cambio cancelado; no se modificó la configuración."
+                return "Necesito que confirmes o rechaces la autorización pendiente."
+            if self._provider == "gemini":
+                return self._send_gemini(user_message)
+            return self._send_openai(user_message)
 
     def send_message_with_image(self, user_message: str, image_path: str) -> str:
         """Envía un mensaje con imagen al LLM (visión multimodal).
@@ -547,11 +550,12 @@ class JarvisAgent:
         Returns:
             str: Respuesta textual del asistente.
         """
-        self.last_captured_image_path = None
-        self.last_generated_video_path = None
-        if self._provider == "gemini":
-            return self._send_gemini_with_image(user_message, image_path)
-        return self._send_openai_with_image(user_message, image_path)
+        with self._lock:
+            self.last_captured_image_path = None
+            self.last_generated_video_path = None
+            if self._provider == "gemini":
+                return self._send_gemini_with_image(user_message, image_path)
+            return self._send_openai_with_image(user_message, image_path)
 
     # ------------------------------------------------------------------
     # Implementación por proveedor
@@ -570,9 +574,10 @@ class JarvisAgent:
         import google.generativeai as genai  # type: ignore
 
         response = self._chat.send_message(user_message)
+        last_tool_result = ""
 
         # Ciclo de function calling
-        while True:
+        for _ in range(8):
             # Recolectar todas las llamadas a herramientas de la respuesta
             tool_calls = [
                 part.function_call
@@ -590,6 +595,7 @@ class JarvisAgent:
 
             for call in tool_calls:
                 resultado = self._execute_tool(call.name, dict(call.args))
+                last_tool_result = resultado
                 tool_responses.append(
                     genai.protos.Part(
                         function_response=genai.protos.FunctionResponse(
@@ -616,11 +622,24 @@ class JarvisAgent:
             else:
                 response = self._chat.send_message(tool_responses)
 
-        # Extraer texto de la respuesta final
+        return self._gemini_text(response, last_tool_result)
+
+    @staticmethod
+    def _gemini_text(response: object, fallback: str = "") -> str:
+        """Extrae texto incluso cuando Gemini no expone ``response.text``."""
         try:
-            return response.text
-        except ValueError:
-            return "[No se pudo obtener una respuesta textual del modelo.]"
+            text = str(getattr(response, "text", "") or "").strip()
+        except (ValueError, AttributeError):
+            text = ""
+        if text:
+            return text
+        for candidate in getattr(response, "candidates", []) or []:
+            content = getattr(candidate, "content", None)
+            for part in getattr(content, "parts", []) or []:
+                part_text = str(getattr(part, "text", "") or "").strip()
+                if part_text:
+                    return part_text
+        return fallback or "[El modelo terminó sin devolver texto ni un resultado de herramienta.]"
 
     def _send_gemini_with_image(self, user_message: str, image_path: str) -> str:
         """Envía texto + imagen a Gemini (visión multimodal)."""
@@ -645,7 +664,8 @@ class JarvisAgent:
         response = self._chat.send_message([user_message, image_part])
 
         # Ciclo de function calling (igual que _send_gemini)
-        while True:
+        last_tool_result = ""
+        for _ in range(8):
             tool_calls = [
                 part.function_call
                 for candidate in response.candidates
@@ -657,6 +677,7 @@ class JarvisAgent:
             tool_responses = []
             for call in tool_calls:
                 resultado = self._execute_tool(call.name, dict(call.args))
+                last_tool_result = resultado
                 tool_responses.append(
                     genai.protos.Part(
                         function_response=genai.protos.FunctionResponse(
@@ -667,10 +688,7 @@ class JarvisAgent:
                 )
             response = self._chat.send_message(tool_responses)
 
-        try:
-            return response.text
-        except ValueError:
-            return "[No se pudo obtener una respuesta textual del modelo.]"
+        return self._gemini_text(response, last_tool_result)
 
     def _send_openai(self, user_message: str) -> str:
         """

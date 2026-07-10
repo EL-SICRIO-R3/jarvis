@@ -103,6 +103,10 @@ GEMINI_API_KEY=tu_clave_aqui
 # Proveedor alternativo — OpenAI (fallback)
 # OPENAI_API_KEY=tu_clave_aqui
 
+# Telegram (opcional; activa el control remoto al iniciar Jarvis)
+# TELEGRAM_BOT_TOKEN=pega_aqui_el_token_de_BotFather
+# TELEGRAM_ALLOWED_CHAT_IDS=123456789,987654321
+
 # Voz ultra-natural — ElevenLabs TTS (opcional, recomendado)
 # ELEVENLABS_API_KEY=tu_clave_aqui
 ```
@@ -119,6 +123,16 @@ GEMINI_API_KEY=tu_clave_aqui
 ```bash
 python main.py
 ```
+
+### Control remoto desde Telegram (opcional)
+
+1. Crea un bot con [@BotFather](https://t.me/BotFather) y copia su token.
+2. Añade `TELEGRAM_BOT_TOKEN=...` al mismo `.env` y vuelve a iniciar Jarvis.
+3. Envía `/start` al bot y luego tus instrucciones en texto.
+
+`TELEGRAM_ALLOWED_CHAT_IDS` es opcional, pero se recomienda configurarlo con los
+IDs numéricos autorizados para evitar que otra persona con acceso al bot pueda
+controlar el equipo. Usa `/reset` para borrar el historial de conversación.
 
 Al arrancar verás en la terminal:
 

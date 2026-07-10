@@ -28,6 +28,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 from ai_agent import JarvisAgent
 from gui import JarvisWindow
+from telegram_bot import start_telegram_bot
 
 # ---------------------------------------------------------------------------
 # Constantes
@@ -106,6 +107,8 @@ class JarvisApp:
         self._window.show()  # Mostrar directamente al arrancar con foco
 
         print("[Jarvis] Listo.")
+        if self._agent is not None and start_telegram_bot(self._agent):
+            print("[Jarvis] Telegram activado.")
 
         # Bucle de eventos (bloquea hasta que se llame a quit())
         try:
