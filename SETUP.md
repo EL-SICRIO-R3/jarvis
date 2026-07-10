@@ -141,8 +141,8 @@ dependencias dentro del entorno virtual:
 python -m pip install -r requirements.txt
 ```
 
-En macOS instalado desde python.org, ejecuta también `Install
-Certificates.command`, incluido normalmente en `/Applications/Python 3.x/`
+En macOS instalado desde python.org, ejecuta también
+`Install Certificates.command`, incluido normalmente en `/Applications/Python 3.x/`
 (consulta tu versión con `python3 --version` y sustituye `3.x`). Este comando
 instala los certificados raíz necesarios para validar conexiones HTTPS; después,
 vuelve a iniciar Jarvis.

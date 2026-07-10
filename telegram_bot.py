@@ -21,7 +21,7 @@ _MAX_MESSAGE_LENGTH = 4096
 try:
     import truststore
 
-    # Instala una sola vez los certificados del sistema para las conexiones HTTPS.
+    # Inicializa una sola vez los certificados del sistema para las conexiones HTTPS.
     truststore.inject_into_ssl()
 except ImportError:
     _LOGGER.warning(
