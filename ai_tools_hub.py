@@ -720,11 +720,14 @@ def generar_video(descripcion: str, duracion: int = 5, estilo: str = "") -> str:
             from google.genai import types as _ggenai_types  # type: ignore
 
             client = _ggenai.Client(api_key=gemini_key)
+            veo_duration = min(
+                (4, 6, 8), key=lambda supported: abs(supported - int(duracion))
+            )
             operation = client.models.generate_videos(
                 model=os.getenv("GEMINI_VIDEO_MODEL", "veo-3.1-fast-generate-preview"),
                 prompt=prompt,
                 config=_ggenai_types.GenerateVideosConfig(
-                    duration_seconds=min(max(int(duracion), 4), 8),
+                    duration_seconds=veo_duration,
                     aspect_ratio="16:9",
                 ),
             )
@@ -779,7 +782,9 @@ def generar_video(descripcion: str, duracion: int = 5, estilo: str = "") -> str:
                 raise RuntimeError(f"Tarea fallida: {task.failure}")
 
             video_url = task.output[0]
-            video_data = _req.get(video_url, timeout=60).content
+            video_response = _req.get(video_url, timeout=60)
+            video_response.raise_for_status()
+            video_data = video_response.content
             with open(output_path, "wb") as f:
                 f.write(video_data)
             return output_path
