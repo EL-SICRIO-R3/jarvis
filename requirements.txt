@@ -36,9 +36,6 @@ truststore>=0.10.0   # certificados SSL del sistema en macOS/Windows/Linux
 # TTS fallback para sistemas no macOS
 pyttsx3>=2.90
 
-# Síntesis de voz – TTS ultra-natural (ElevenLabs, requiere ELEVENLABS_API_KEY)
-elevenlabs>=1.0.0
-
 # Imágenes – carga, redimensionado y preview en canvas
 Pillow>=10.0.0
 

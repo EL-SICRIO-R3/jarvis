@@ -64,7 +64,7 @@ _CONNECT_D3   = 0.68  # umbral de conexion en distancia de cuerda 3D
 _FPS          = 30
 
 _WIDGET_W, _WIDGET_H = 220, 220        # dimensiones del modo widget
-_EDGE_VOICES = [                       # voces neural edge-tts (español)
+_LOCAL_VOICES = [                      # voces disponibles en la configuración local
     ("Jorge · México  (Neural)", "es-MX-JorgeNeural"),
     ("Dalia · México  (Neural)", "es-MX-DaliaNeural"),
     ("Álvaro · España (Neural)", "es-ES-AlvaroNeural"),
@@ -72,24 +72,6 @@ _EDGE_VOICES = [                       # voces neural edge-tts (español)
     ("Elena · Argentina (Neural)", "es-AR-ElenaNeural"),
     ("Tomás · Argentina (Neural)", "es-AR-TomasNeural"),
 ]
-
-# Voces ElevenLabs predefinidas (id obtenido de la API de ElevenLabs)
-_ELEVEN_VOICES = [
-    ("Adam · (ElevenLabs)", "pNInz6obpgDQGcFmaJgB"),
-    ("Agustín · (ElevenLabs)", "ByVRQtaK1WDOvTmP1PKO"),
-    ("Antoni · (ElevenLabs)", "ErXwobaYiN019PkySvjV"),
-    ("Arnold · (ElevenLabs)", "VR6AewLTigWG4xSOukaG"),
-    ("Bella · (ElevenLabs)", "EXAVITQu4vr4xnSDxMaL"),
-    ("Domi · (ElevenLabs)", "AZnzlk1XvdvUeBnXmlld"),
-    ("Elli · (ElevenLabs)", "MF3mGyEYCl7XYWbV9V6O"),
-    ("Josh · (ElevenLabs)", "TxGEqnHWrfWFTfGW9XjX"),
-    ("Rachel · (ElevenLabs)", "21m00Tcm4TlvDq8ikWAM"),
-    ("Sam · (ElevenLabs)", "yoZ06aMxZJJ28mfd3POQ"),
-]
-
-_ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY", "")
-_ELEVEN_VOICE_IDS: set[str] = {v for _, v in _ELEVEN_VOICES}  # búsqueda O(1)
-
 
 def _open_path(path: str) -> None:
     """Abre un archivo con la aplicación predeterminada del sistema."""
@@ -154,10 +136,7 @@ class JarvisWindow(_DND_BASE):
         self._video_preview_rect             = None
 
         # ── Ajustes ──────────────────────────────────────────────────────────
-        # Si hay clave de ElevenLabs, usar la primera voz de ElevenLabs por defecto
-        self._selected_voice: str = (
-            _ELEVEN_VOICES[0][1] if _ELEVENLABS_API_KEY else "es-MX-JorgeNeural"
-        )
+        self._selected_voice: str = _LOCAL_VOICES[0][1]
         self._text_mode: bool     = False
         self._widget_mode: bool   = False
         self._restore_geometry: str = f"{_W}x{_H}"
@@ -167,15 +146,6 @@ class JarvisWindow(_DND_BASE):
         self._settings_win         = None
         self._bottom_frame         = None   # asignado en _build_ui
         self._btns_row             = None   # asignado en _build_ui
-
-        # ── Cliente ElevenLabs (inicializado una sola vez si hay API key) ──────
-        self._eleven_client = None
-        if _ELEVENLABS_API_KEY:
-            try:
-                from elevenlabs.client import ElevenLabs
-                self._eleven_client = ElevenLabs(api_key=_ELEVENLABS_API_KEY)
-            except Exception:
-                pass
 
         self._configure_window()
         self._build_ui()
@@ -1167,10 +1137,8 @@ class JarvisWindow(_DND_BASE):
 
     def _speak(self, text: str) -> None:
         chunk = text[:400]
-        # Prioridad: ElevenLabs (si hay clave) → edge-tts (macOS) → pyttsx3
-        if self._eleven_client and self._selected_voice in _ELEVEN_VOICE_IDS:
-            self._speak_elevenlabs(chunk)
-        elif _SO == "darwin":
+        # edge-tts usa las voces configuradas localmente; pyttsx3 es el fallback offline.
+        if _SO == "darwin":
             self._speak_neural(chunk)
         else:
             try:
@@ -1182,40 +1150,6 @@ class JarvisWindow(_DND_BASE):
                 engine.stop()
             except Exception:
                 pass
-
-    def _speak_elevenlabs(self, text: str) -> None:
-        """TTS ultra-natural con ElevenLabs API. Fallback a edge-tts / say."""
-        import tempfile
-        try:
-            from elevenlabs import VoiceSettings
-        except ImportError:
-            self._speak_neural(text)
-            return
-
-        try:
-            audio_iter = self._eleven_client.text_to_speech.convert(
-                voice_id=self._selected_voice,
-                text=text,
-                model_id="eleven_multilingual_v2",
-                voice_settings=VoiceSettings(
-                    stability=0.45,
-                    similarity_boost=0.80,
-                    style=0.30,
-                    use_speaker_boost=True,
-                ),
-            )
-            # Volcar el iterador a un archivo MP3 temporal
-            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
-                self._tts_tmpfile = f.name
-                for chunk in audio_iter:
-                    f.write(chunk)
-        except Exception:
-            self._tts_tmpfile = None
-            # Fallback a edge-tts o say si ElevenLabs falla
-            self._speak_neural(text)
-            return
-
-        self._play_tmpfile()
 
     def _play_tmpfile(self) -> None:
         """Reproduce self._tts_tmpfile con el reproductor disponible."""
@@ -1266,8 +1200,23 @@ class JarvisWindow(_DND_BASE):
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
                 self._tts_tmpfile = f.name
 
+            mood = self._agent.current_mood if self._agent else "neutral"
+            prosody = {
+                "alegre": ("+8%", "+10Hz"),
+                "triste": ("-8%", "-10Hz"),
+                "frustrado": ("+3%", "+0Hz"),
+                "urgente": ("+14%", "+15Hz"),
+                "cansado": ("-14%", "-15Hz"),
+                "neutral": ("+0%", "+0Hz"),
+            }.get(mood, ("+0%", "+0Hz"))
+
             async def _gen():
-                comm = edge_tts.Communicate(text, self._selected_voice)
+                comm = edge_tts.Communicate(
+                    text,
+                    self._selected_voice,
+                    rate=prosody[0],
+                    pitch=prosody[1],
+                )
                 await comm.save(self._tts_tmpfile)
 
             asyncio.run(_gen())
@@ -1516,13 +1465,8 @@ class JarvisWindow(_DND_BASE):
         _sep(50)
 
         # ── Voz del agente ───────────────────────────────────────────────
-        # Si hay clave ElevenLabs, mostrar también voces neural como respaldo.
-        if _ELEVENLABS_API_KEY:
-            _active_voices = _ELEVEN_VOICES + _EDGE_VOICES
-            voice_label = "VOZ DEL AGENTE  (ElevenLabs ✦ + Neural)"
-        else:
-            _active_voices = _EDGE_VOICES
-            voice_label = "VOZ DEL AGENTE"
+        _active_voices = _LOCAL_VOICES
+        voice_label = "VOZ LOCAL DEL AGENTE"
         tk.Label(win, text=voice_label, fg=self._blend(col, 0.55),
                  bg="#0C0C0C", font=("Helvetica Neue", 9, "bold")
                  ).place(x=22, y=62)

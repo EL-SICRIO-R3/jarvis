@@ -362,6 +362,37 @@ _AUTH_REJECT_RE = re.compile(
     r"^\s*(?:no\s+(?:autorizo|quiero|lo hagas)|cancel(?:ar|o)|rechazo)(?:\s|[.!,:;]|$)"
 )
 
+_MOOD_KEYWORDS = {
+    "triste": ("triste", "deprimid", "llor", "solo", "mal día", "mal dia", "pena"),
+    "frustrado": ("frustr", "hart", "desesper", "enoj", "cabre", "error"),
+    "alegre": ("feliz", "content", "genial", "increíble", "increible", "jaja", "gracias"),
+    "urgente": ("urgente", "rápido", "rapido", "ya mismo", "emergencia", "asap"),
+    "cansado": ("cansad", "agotad", "sueño", "sueno", "no puedo más", "no puedo mas"),
+}
+
+
+def detect_mood(message: str) -> str:
+    """Detecta el tono dominante del mensaje sin enviar datos a un servicio externo."""
+    normalized = message.lower()
+    for mood, keywords in _MOOD_KEYWORDS.items():
+        if any(keyword in normalized for keyword in keywords):
+            return mood
+    return "neutral"
+
+
+def _mood_context(mood: str) -> str:
+    """Devuelve instrucciones breves para adaptar la respuesta al estado del usuario."""
+    instructions = {
+        "triste": "Responde con calidez y empatía; valida sus emociones y evita bromas intensas.",
+        "frustrado": "Responde con calma, reconoce la frustración y ofrece pasos concretos sin culpar.",
+        "alegre": "Acompaña su energía positiva con entusiasmo moderado y humor ligero.",
+        "urgente": "Sé directo, prioriza la acción inmediata y evita explicaciones innecesarias.",
+        "cansado": "Sé especialmente breve, claro y amable; no sobrecargues al usuario.",
+        "neutral": "Mantén tu personalidad habitual y ajusta el tono al contexto de la conversación.",
+    }
+    return instructions[mood]
+
+
 SYSTEM_PROMPT = """Eres Jarvis, el asistente personal de IA más payaso y random del universo conocido (y desconocido).
 
 Personalidad:
@@ -379,6 +410,8 @@ Personalidad:
 - Si el usuario dice algo, puedes reírte con él (no de él). Si hay un error, lo señalas con humor
   y sin drama: "eyyy eso no cuadra jaja, déjame revisarlo".
 - Adaptas el tono: si el usuario se pone serio, te calmas un poco sin perder tu esencia payaso.
+- El contexto de tono incluido en cada mensaje tiene prioridad sobre el humor: acompaña al usuario
+  con empatía cuando esté triste, frustrado o cansado, y sé directo cuando haya urgencia.
 
 Capacidades:
 - Leer el portapapeles del sistema.
@@ -442,6 +475,7 @@ class JarvisAgent:
 
     def __init__(self, provider: Optional[str] = None) -> None:
         self._provider = self._resolve_provider(provider)
+        self._current_mood = "neutral"
         self._history: list[dict] = []
         self.last_saved_path: Optional[str] = None          # leído por gui.py para ofrecer "abrir archivo"
         self.last_captured_image_path: Optional[str] = None  # leído por gui.py para mostrar preview
@@ -511,6 +545,11 @@ class JarvisAgent:
         """Retorna el nombre del proveedor LLM activo."""
         return self._provider
 
+    @property
+    def current_mood(self) -> str:
+        """Retorna el tono detectado en el último mensaje del usuario."""
+        return self._current_mood
+
     def reset_history(self) -> None:
         """Reinicia el historial de conversación."""
         self._history = []
@@ -531,16 +570,22 @@ class JarvisAgent:
             str: Respuesta textual final del asistente.
         """
         with self._lock:
+            original_message = user_message
+            self._current_mood = detect_mood(user_message)
+            user_message = (
+                f"[Contexto de tono: {_mood_context(self._current_mood)}]\n"
+                f"Mensaje del usuario: {user_message}"
+            )
             self.last_captured_image_path = None
             self.last_generated_video_path = None
             if self._pending_authorization is not None:
-                if _AUTH_CONFIRM_RE.match(user_message.lower()):
+                if _AUTH_CONFIRM_RE.match(original_message.lower()):
                     nombre, args = self._pending_authorization
                     self._pending_authorization = None
                     return self._execute_tool(
                         nombre, {**args, self._AUTHORIZATION_KEY: True}, _authorized=True
                     )
-                if _AUTH_REJECT_RE.match(user_message.lower()):
+                if _AUTH_REJECT_RE.match(original_message.lower()):
                     self._pending_authorization = None
                     return "Cambio cancelado; no se modificó la configuración."
                 return "Necesito que confirmes o rechaces la autorización pendiente."
@@ -559,6 +604,11 @@ class JarvisAgent:
             str: Respuesta textual del asistente.
         """
         with self._lock:
+            self._current_mood = detect_mood(user_message)
+            user_message = (
+                f"[Contexto de tono: {_mood_context(self._current_mood)}]\n"
+                f"Mensaje del usuario: {user_message}"
+            )
             self.last_captured_image_path = None
             self.last_generated_video_path = None
             if self._provider == "gemini":

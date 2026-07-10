@@ -107,14 +107,11 @@ GEMINI_API_KEY=tu_clave_aqui
 # TELEGRAM_BOT_TOKEN=pega_aqui_el_token_de_BotFather
 # TELEGRAM_ALLOWED_CHAT_IDS=123456789,987654321
 
-# Voz ultra-natural — ElevenLabs TTS (opcional, recomendado)
-# ELEVENLABS_API_KEY=tu_clave_aqui
 ```
 
 > **¿Dónde obtengo la clave?**
 > - Gemini: [Google AI Studio → API Keys](https://aistudio.google.com/app/apikey)
 > - OpenAI: [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-> - ElevenLabs: [elevenlabs.io/app/settings/api-keys](https://elevenlabs.io/app/settings/api-keys)
 
 ---
 
