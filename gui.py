@@ -64,6 +64,7 @@ _CONNECT_D3   = 0.68  # umbral de conexion en distancia de cuerda 3D
 _FPS          = 30
 
 _WIDGET_W, _WIDGET_H = 220, 220        # dimensiones del modo widget
+# Gemini TTS returns raw 16-bit PCM, mono, at 24 kHz.
 _GOOGLE_TTS_CHANNELS = 1
 _GOOGLE_TTS_SAMPLE_WIDTH = 2
 _GOOGLE_TTS_SAMPLE_RATE = 24000
@@ -1287,7 +1288,7 @@ class JarvisWindow(_DND_BASE):
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
                 self._tts_tmpfile = f.name
 
-            mood = self._agent.current_mood if self._agent else "neutral"
+            mood = getattr(self._agent, "current_mood", "neutral")
             prosody = _MOOD_PROSODY.get(mood, _MOOD_PROSODY["neutral"])
 
             async def _gen():
