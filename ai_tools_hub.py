@@ -721,11 +721,10 @@ def generar_video(descripcion: str, duracion: int = 5, estilo: str = "") -> str:
 
             client = _ggenai.Client(api_key=gemini_key)
             operation = client.models.generate_videos(
-                model="veo-2.0-generate-001",
+                model=os.getenv("GEMINI_VIDEO_MODEL", "veo-3.1-fast-generate-preview"),
                 prompt=prompt,
                 config=_ggenai_types.GenerateVideosConfig(
-                    number_of_videos=1,
-                    duration_seconds=min(max(int(duracion), 5), 8),
+                    duration_seconds=min(max(int(duracion), 4), 8),
                     aspect_ratio="16:9",
                 ),
             )
@@ -740,7 +739,14 @@ def generar_video(descripcion: str, duracion: int = 5, estilo: str = "") -> str:
             if operation.error:
                 raise RuntimeError(str(operation.error))
 
-            video_bytes = operation.result.generated_videos[0].video.video_bytes
+            result = getattr(operation, "response", None) or getattr(operation, "result", None)
+            generated_videos = getattr(result, "generated_videos", None)
+            if not generated_videos:
+                raise RuntimeError("La API no devolvió ningún video.")
+            video = generated_videos[0].video
+            video_bytes = getattr(video, "video_bytes", None) or getattr(video, "video", None)
+            if not video_bytes:
+                raise RuntimeError("La API no devolvió los datos del video.")
             with open(output_path, "wb") as f:
                 f.write(video_bytes)
             return output_path

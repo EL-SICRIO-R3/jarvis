@@ -196,13 +196,24 @@ class JarvisWindow(_DND_BASE):
         bottom.pack(side="bottom", fill="x")
         self._bottom_frame = bottom
 
-        self._lbl_response = tk.Label(
-            bottom, text="",
+        response_frame = tk.Frame(bottom, bg="black")
+        response_frame.pack(fill="x", padx=24, pady=(10, 2))
+        self._response_text = tk.Text(
+            response_frame, height=4, wrap="word",
             fg="#777777", bg="black",
+            insertbackground="#777777",
             font=("Helvetica Neue", 12),
-            wraplength=_W - 60, justify="center",
+            relief="flat", bd=0, highlightthickness=0,
+            padx=0, pady=0,
         )
-        self._lbl_response.pack(pady=(10, 2))
+        self._response_text.pack(side="left", fill="both", expand=True)
+        response_scroll = tk.Scrollbar(
+            response_frame, orient="vertical",
+            command=self._response_text.yview,
+        )
+        response_scroll.pack(side="right", fill="y")
+        self._response_text.configure(yscrollcommand=response_scroll.set)
+        self._response_text.configure(state="disabled")
 
         self._lbl_status = tk.Label(
             bottom, text=_STATE_LABEL[_IDLE],
@@ -1612,8 +1623,14 @@ class JarvisWindow(_DND_BASE):
         self.after(0, lambda: self._lbl_status.configure(text=text))
 
     def _show_response(self, text: str) -> None:
-        display = text[:150] + "…" if len(text) > 150 else text
-        self.after(0, lambda: self._lbl_response.configure(text=display))
+        def _update() -> None:
+            self._response_text.configure(state="normal")
+            self._response_text.delete("1.0", "end")
+            self._response_text.insert("1.0", text)
+            self._response_text.configure(state="disabled")
+            self._response_text.see("1.0")
+
+        self.after(0, _update)
 
     # ── Mostrar / ocultar ────────────────────────────────────────────────
     def show(self) -> None:
