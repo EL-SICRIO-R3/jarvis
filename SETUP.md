@@ -99,6 +99,8 @@ Abre `.env` y agrega al menos una clave:
 ```env
 # Proveedor principal — Google Gemini (recomendado)
 GEMINI_API_KEY=tu_clave_aqui
+# Modelo opcional para las voces Gemini TTS
+# GEMINI_TTS_MODEL=gemini-2.5-flash-preview-tts
 
 # Proveedor alternativo — OpenAI (fallback)
 # OPENAI_API_KEY=tu_clave_aqui

@@ -1198,7 +1198,7 @@ class JarvisWindow(_DND_BASE):
         except Exception:
             pass
         self._tts_tmpfile = None
-        self._tts_tmpfile = None
+
     def _speak_google(self, text: str) -> bool:
         """Genera audio PCM con Gemini TTS y lo reproduce como WAV."""
         import base64
@@ -1245,6 +1245,11 @@ class JarvisWindow(_DND_BASE):
             self._play_tmpfile()
             return True
         except Exception:
+            if self._tts_tmpfile:
+                try:
+                    os.unlink(self._tts_tmpfile)
+                except OSError:
+                    pass
             self._tts_tmpfile = None
             return False
 
@@ -1276,7 +1281,11 @@ class JarvisWindow(_DND_BASE):
             async def _gen():
                 comm = edge_tts.Communicate(
                     text,
-                    self._selected_voice,
+                    (
+                        self._selected_voice
+                        if not self._selected_voice.startswith("gemini:")
+                        else _LOCAL_VOICES[0][1]
+                    ),
                     rate=prosody[0],
                     pitch=prosody[1],
                 )
