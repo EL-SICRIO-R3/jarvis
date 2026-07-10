@@ -240,7 +240,9 @@ class JarvisWindow(_DND_BASE):
             self._text_input_frame, height=58, bg="black",
             highlightthickness=0,
         )
-        self._text_dialog_canvas.pack(fill="x", padx=24, pady=(0, 12))
+        self._text_dialog_canvas.pack(
+            side="left", fill="x", expand=True, padx=(24, 8), pady=(0, 12)
+        )
         self._text_dialog_content = tk.Frame(
             self._text_dialog_canvas, bg="#111214", height=52
         )
@@ -261,12 +263,12 @@ class JarvisWindow(_DND_BASE):
         self._text_entry.pack(side="left", padx=(12, 8), ipady=6, pady=9,
                               expand=True, fill="x")
         self._text_entry.bind("<Return>", lambda _e: self._send_text_input())
-        _sPW, _sPH = 80, 34
+        _sPW, _sPH = 34, 34
         self._send_pill = tk.Canvas(
             self._text_input_frame, width=_sPW, height=_sPH,
             bg="black", highlightthickness=0, cursor="hand2",
         )
-        self._send_pill.pack(side="left", padx=(0, 12))
+        self._send_pill.pack(side="left", padx=(0, 8), pady=(12, 12))
         self._send_pill.bind("<Button-1>", lambda _e: self._send_text_input())
         self._draw_send_pill()
 
@@ -278,7 +280,7 @@ class JarvisWindow(_DND_BASE):
             self._text_input_frame, width=_PW, height=_PH,
             bg="black", highlightthickness=0, cursor="hand2",
         )
-        self._pill.pack(side="left", padx=(0, 8))
+        self._pill.pack(side="left", padx=(0, 24), pady=(12, 12))
         self._pill.bind("<Button-1>", lambda _e: self._toggle_pause())
         self._draw_pill()
 
@@ -1337,7 +1339,7 @@ class JarvisWindow(_DND_BASE):
         """Redibuja el botón enviar del cuadro de texto."""
         c = self._send_pill
         c.delete("all")
-        W, H = 80, 34
+        W, H = 34, 34
         R    = H // 2
         bg   = "#1A6FFF"
         bdr  = "#2A7FFF"
@@ -1346,8 +1348,14 @@ class JarvisWindow(_DND_BASE):
         c.create_rectangle(R, 1, W - R, H - 1, fill=bg, outline="")
         c.create_line(R, 0, W - R, 0, fill=bdr, width=1)
         c.create_line(R, H - 1, W - R, H - 1, fill=bdr, width=1)
-        c.create_text(W // 2, H // 2, text="ENVIAR", fill="white",
-                      font=("Helvetica Neue", 11, "bold"))
+        # Paper-plane icon coordinates are relative to the 34x34 canvas.
+        plane_points = (10, 17, 24, 10, 19, 24, 16, 18)
+        c.create_polygon(
+            *plane_points,
+            fill="white", outline="",
+        )
+        plane_fold = (10, 17, 16, 18)
+        c.create_line(*plane_fold, fill=bg, width=1)
 
     def _draw_text_dialog(self, event=None) -> None:
         """Dibuja el contenedor redondeado del cuadro de texto."""

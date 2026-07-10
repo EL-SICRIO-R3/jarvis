@@ -22,6 +22,9 @@ google-genai>=1.0.0
 # Carga de variables de entorno desde .env
 python-dotenv>=1.0.0
 
+# Control remoto opcional desde Telegram
+python-telegram-bot==22.1
+
 # Reconocimiento de voz – STT  (requiere: brew install portaudio)
 SpeechRecognition>=3.10.0
 pyaudio>=0.2.14

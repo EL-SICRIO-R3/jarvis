@@ -41,6 +41,7 @@ La interfaz visual presenta una **esfera molecular animada en 3D** sobre fondo n
 - [Requisitos del sistema](#requisitos-del-sistema)
 - [Instalación](#instalación)
 - [Configuración](#configuración)
+- [Telegram](#telegram)
 - [Uso](#uso)
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Alcance y limitaciones](#alcance-y-limitaciones)
@@ -285,6 +286,23 @@ GEMINI_API_KEY=tu_clave_de_gemini_aqui
 ```bash
 python main.py
 ```
+
+## Telegram
+
+Jarvis puede recibir instrucciones desde Telegram mientras la aplicación local
+está ejecutándose. Instala las dependencias, crea un bot con BotFather y añade
+su token al `.env`:
+
+```env
+TELEGRAM_BOT_TOKEN=tu_token_de_telegram
+# Recomendado: IDs numéricos separados por comas
+TELEGRAM_ALLOWED_CHAT_IDS=123456789
+```
+
+Al arrancar `main.py`, el polling se inicia automáticamente si existe el token.
+Envía `/start` al bot y después cualquier instrucción; `/reset` reinicia el
+historial. Las respuestas largas se envían divididas y los archivos generados
+se adjuntan automáticamente.
 
 Una vez iniciado:
 
