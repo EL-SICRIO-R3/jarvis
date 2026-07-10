@@ -64,6 +64,9 @@ _CONNECT_D3   = 0.68  # umbral de conexion en distancia de cuerda 3D
 _FPS          = 30
 
 _WIDGET_W, _WIDGET_H = 220, 220        # dimensiones del modo widget
+_GOOGLE_TTS_CHANNELS = 1
+_GOOGLE_TTS_SAMPLE_WIDTH = 2
+_GOOGLE_TTS_SAMPLE_RATE = 24000
 _LOCAL_VOICES = [                      # voces disponibles en la configuración de Jarvis
     ("Jorge · México  (Neural)", "es-MX-JorgeNeural"),
     ("Dalia · México  (Neural)", "es-MX-DaliaNeural"),
@@ -1238,9 +1241,9 @@ class JarvisWindow(_DND_BASE):
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
                 self._tts_tmpfile = f.name
             with wave.open(self._tts_tmpfile, "wb") as wav:
-                wav.setnchannels(1)
-                wav.setsampwidth(2)
-                wav.setframerate(24000)
+                wav.setnchannels(_GOOGLE_TTS_CHANNELS)
+                wav.setsampwidth(_GOOGLE_TTS_SAMPLE_WIDTH)
+                wav.setframerate(_GOOGLE_TTS_SAMPLE_RATE)
                 wav.writeframes(audio_data)
             self._play_tmpfile()
             return True
