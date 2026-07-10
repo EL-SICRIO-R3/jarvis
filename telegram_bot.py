@@ -103,8 +103,8 @@ class TelegramBridge:
             truststore.inject_into_ssl()
         except ImportError:
             _LOGGER.warning(
-                "No se pudo cargar truststore; la conexión de Telegram usará "
-                "los certificados predeterminados de Python."
+                "No se pudo cargar truststore; en macOS podrían aparecer "
+                "errores SSL. Instálalo con: python -m pip install truststore"
             )
         from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
