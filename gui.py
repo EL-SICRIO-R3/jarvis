@@ -1204,7 +1204,15 @@ class JarvisWindow(_DND_BASE):
         self._tts_tmpfile = None
 
     def _speak_google(self, text: str) -> bool:
-        """Genera audio PCM con Gemini TTS y lo reproduce como WAV."""
+        """Genera y reproduce audio Gemini TTS.
+
+        Args:
+            text: Texto que se enviará al modelo de voz.
+
+        Returns:
+            True si el audio se generó y reprodujo; False si debe usarse
+            el fallback local.
+        """
         import base64
         import tempfile
         import wave
