@@ -72,6 +72,15 @@ _LOCAL_VOICES = [                      # voces disponibles en la configuración 
     ("Elena · Argentina (Neural)", "es-AR-ElenaNeural"),
     ("Tomás · Argentina (Neural)", "es-AR-TomasNeural"),
 ]
+_GOOGLE_VOICES = [                    # voces predefinidas de Gemini TTS
+    ("Kore · Google Gemini", "gemini:Kore"),
+    ("Puck · Google Gemini", "gemini:Puck"),
+    ("Aoede · Google Gemini", "gemini:Aoede"),
+    ("Charon · Google Gemini", "gemini:Charon"),
+    ("Leda · Google Gemini", "gemini:Leda"),
+    ("Zephyr · Google Gemini", "gemini:Zephyr"),
+]
+_ALL_VOICES = _LOCAL_VOICES + _GOOGLE_VOICES
 _MOOD_PROSODY = {
     # Cambios suaves para reflejar el tono sin volver la voz artificial o estridente.
     "alegre": ("+8%", "+10Hz"),
@@ -1146,6 +1155,9 @@ class JarvisWindow(_DND_BASE):
 
     def _speak(self, text: str) -> None:
         chunk = text[:400]
+        if self._selected_voice.startswith("gemini:"):
+            if self._speak_google(chunk):
+                return
         # Usa la voz configurada en Jarvis; pyttsx3 es el fallback offline.
         if _SO == "darwin":
             self._speak_neural(chunk)
@@ -1186,6 +1198,55 @@ class JarvisWindow(_DND_BASE):
         except Exception:
             pass
         self._tts_tmpfile = None
+        self._tts_tmpfile = None
+    def _speak_google(self, text: str) -> bool:
+        """Genera audio PCM con Gemini TTS y lo reproduce como WAV."""
+        import base64
+        import tempfile
+        import wave
+
+        try:
+            from google import genai
+            from google.genai import types
+
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                return False
+
+            client = genai.Client(api_key=api_key)
+            voice_name = self._selected_voice.removeprefix("gemini:")
+            response = client.models.generate_content(
+                model=os.getenv(
+                    "GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts"
+                ),
+                contents=text,
+                config=types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name=voice_name
+                            )
+                        )
+                    ),
+                ),
+            )
+            audio_data = response.candidates[0].content.parts[0].inline_data.data
+            if isinstance(audio_data, str):
+                audio_data = base64.b64decode(audio_data)
+
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                self._tts_tmpfile = f.name
+            with wave.open(self._tts_tmpfile, "wb") as wav:
+                wav.setnchannels(1)
+                wav.setsampwidth(2)
+                wav.setframerate(24000)
+                wav.writeframes(audio_data)
+            self._play_tmpfile()
+            return True
+        except Exception:
+            self._tts_tmpfile = None
+            return False
 
     def _speak_neural(self, text: str) -> None:
         """TTS con edge-tts (voz neural Microsoft) + afplay. Fallback a say."""
@@ -1467,8 +1528,8 @@ class JarvisWindow(_DND_BASE):
         _sep(50)
 
         # ── Voz del agente ───────────────────────────────────────────────
-        _active_voices = _LOCAL_VOICES
-        voice_label = "VOZ LOCAL DEL AGENTE"
+        _active_voices = _ALL_VOICES
+        voice_label = "VOZ DEL AGENTE"
         tk.Label(win, text=voice_label, fg=self._blend(col, 0.55),
                  bg="#0C0C0C", font=("Helvetica Neue", 9, "bold")
                  ).place(x=22, y=62)
