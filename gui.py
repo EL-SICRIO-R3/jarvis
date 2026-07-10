@@ -1348,6 +1348,7 @@ class JarvisWindow(_DND_BASE):
         c.create_rectangle(R, 1, W - R, H - 1, fill=bg, outline="")
         c.create_line(R, 0, W - R, 0, fill=bdr, width=1)
         c.create_line(R, H - 1, W - R, H - 1, fill=bdr, width=1)
+        # Ícono de avión de papel para conservar el botón compacto.
         c.create_polygon(
             10, 17, 24, 10, 19, 24, 16, 18,
             fill="white", outline="",
