@@ -64,7 +64,7 @@ _CONNECT_D3   = 0.68  # umbral de conexion en distancia de cuerda 3D
 _FPS          = 30
 
 _WIDGET_W, _WIDGET_H = 220, 220        # dimensiones del modo widget
-_LOCAL_VOICES = [                      # voces disponibles en la configuración local
+_LOCAL_VOICES = [                      # voces disponibles en la configuración de Jarvis
     ("Jorge · México  (Neural)", "es-MX-JorgeNeural"),
     ("Dalia · México  (Neural)", "es-MX-DaliaNeural"),
     ("Álvaro · España (Neural)", "es-ES-AlvaroNeural"),
@@ -72,6 +72,14 @@ _LOCAL_VOICES = [                      # voces disponibles en la configuración 
     ("Elena · Argentina (Neural)", "es-AR-ElenaNeural"),
     ("Tomás · Argentina (Neural)", "es-AR-TomasNeural"),
 ]
+_MOOD_PROSODY = {
+    "alegre": ("+8%", "+10Hz"),
+    "triste": ("-8%", "-10Hz"),
+    "frustrado": ("+3%", "+0Hz"),
+    "urgente": ("+14%", "+15Hz"),
+    "cansado": ("-14%", "-15Hz"),
+    "neutral": ("+0%", "+0Hz"),
+}
 
 def _open_path(path: str) -> None:
     """Abre un archivo con la aplicación predeterminada del sistema."""
@@ -1137,7 +1145,7 @@ class JarvisWindow(_DND_BASE):
 
     def _speak(self, text: str) -> None:
         chunk = text[:400]
-        # edge-tts usa las voces configuradas localmente; pyttsx3 es el fallback offline.
+        # Usa la voz configurada en Jarvis; pyttsx3 es el fallback offline.
         if _SO == "darwin":
             self._speak_neural(chunk)
         else:
@@ -1201,14 +1209,7 @@ class JarvisWindow(_DND_BASE):
                 self._tts_tmpfile = f.name
 
             mood = getattr(self._agent, "current_mood", "neutral")
-            prosody = {
-                "alegre": ("+8%", "+10Hz"),
-                "triste": ("-8%", "-10Hz"),
-                "frustrado": ("+3%", "+0Hz"),
-                "urgente": ("+14%", "+15Hz"),
-                "cansado": ("-14%", "-15Hz"),
-                "neutral": ("+0%", "+0Hz"),
-            }.get(mood, ("+0%", "+0Hz"))
+            prosody = _MOOD_PROSODY.get(mood, _MOOD_PROSODY["neutral"])
 
             async def _gen():
                 comm = edge_tts.Communicate(

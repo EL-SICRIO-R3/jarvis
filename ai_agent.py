@@ -370,6 +370,13 @@ _MOOD_KEYWORDS = {
     "cansado": ("cansad", "agotad", "sueño", "sueno", "no puedo más", "no puedo mas"),
 }
 _MOOD_PRIORITY = ("urgente", "frustrado", "triste", "cansado", "alegre")
+_MOOD_PATTERNS = {
+    mood: tuple(
+        re.compile(rf"(?<!\w){re.escape(keyword)}")
+        for keyword in keywords
+    )
+    for mood, keywords in _MOOD_KEYWORDS.items()
+}
 
 
 def detect_mood(message: str) -> str:
@@ -378,15 +385,18 @@ def detect_mood(message: str) -> str:
     scores = {
         mood: sum(
             1 for keyword in keywords
-            if re.search(rf"(?<!\w){re.escape(keyword)}", normalized)
+            if keyword.search(normalized)
         )
-        for mood, keywords in _MOOD_KEYWORDS.items()
+        for mood, keywords in _MOOD_PATTERNS.items()
     }
     best_score = max(scores.values(), default=0)
     if best_score:
         return next(
-            mood for mood in _MOOD_PRIORITY
-            if scores[mood] == best_score
+            (
+                mood for mood in _MOOD_PRIORITY
+                if scores.get(mood, 0) == best_score
+            ),
+            "neutral",
         )
     return "neutral"
 
@@ -569,6 +579,11 @@ class JarvisAgent:
         """Retorna el tono detectado en el último mensaje del usuario."""
         return self._current_mood
 
+    def _contextualize_user_message(self, message: str) -> str:
+        """Detecta el tono y prepara el mensaje para el proveedor LLM."""
+        self._current_mood = detect_mood(message)
+        return _contextualize_message(message, self._current_mood)
+
     def reset_history(self) -> None:
         """Reinicia el historial de conversación."""
         self._history = []
@@ -590,10 +605,7 @@ class JarvisAgent:
         """
         with self._lock:
             original_message = user_message
-            self._current_mood = detect_mood(user_message)
-            contextualized_message = _contextualize_message(
-                user_message, self._current_mood
-            )
+            contextualized_message = self._contextualize_user_message(user_message)
             self.last_captured_image_path = None
             self.last_generated_video_path = None
             if self._pending_authorization is not None:
@@ -622,10 +634,7 @@ class JarvisAgent:
             str: Respuesta textual del asistente.
         """
         with self._lock:
-            self._current_mood = detect_mood(user_message)
-            contextualized_message = _contextualize_message(
-                user_message, self._current_mood
-            )
+            contextualized_message = self._contextualize_user_message(user_message)
             self.last_captured_image_path = None
             self.last_generated_video_path = None
             if self._provider == "gemini":
