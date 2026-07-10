@@ -97,6 +97,15 @@ class TelegramBridge:
         """Ejecuta el polling hasta que el proceso sea detenido."""
         if not self.token:
             raise ValueError("Define TELEGRAM_BOT_TOKEN para activar Telegram.")
+        try:
+            import truststore
+
+            truststore.inject_into_ssl()
+        except ImportError:
+            _LOGGER.warning(
+                "No se pudo cargar truststore; la conexión de Telegram usará "
+                "los certificados predeterminados de Python."
+            )
         from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
         application = Application.builder().token(self.token).build()

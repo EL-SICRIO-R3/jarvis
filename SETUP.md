@@ -134,6 +134,17 @@ python main.py
 IDs numéricos autorizados para evitar que otra persona con acceso al bot pueda
 controlar el equipo. Usa `/reset` para borrar el historial de conversación.
 
+Si aparece `CERTIFICATE_VERIFY_FAILED` al iniciar Telegram, actualiza las
+dependencias dentro del entorno virtual:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+En macOS instalado desde python.org, ejecuta también `Install
+Certificates.command`, incluido en la carpeta de instalación de Python, y
+vuelve a iniciar Jarvis.
+
 Al arrancar verás en la terminal:
 
 ```
