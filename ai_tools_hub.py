@@ -17,8 +17,15 @@ from __future__ import annotations
 import os
 import platform
 import subprocess
+import ast
+import json
+import importlib.util
+import logging
+import re
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
+
+_LOGGER = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -40,9 +47,91 @@ def _img_dir() -> Path:
     Devuelve la ruta ``<proyecto>/ia-tools/img`` y la crea si no existe.
     El directorio raíz del proyecto se determina por la ubicación de este módulo.
     """
-    img_dir = Path(__file__).parent / "ia-tools" / "img"
+    config = _config_path()
+    try:
+        configured = json.loads(config.read_text(encoding="utf-8")).get("image_directory")
+    except (OSError, ValueError, AttributeError):
+        configured = None
+    img_dir = Path(os.path.expanduser(configured)) if configured else Path(__file__).parent / "ia-tools" / "img"
     img_dir.mkdir(parents=True, exist_ok=True)
     return img_dir
+
+
+def _config_path() -> Path:
+    """Devuelve el archivo de configuración persistente de Jarvis."""
+    return Path.home() / ".config" / "jarvis" / "config.json"
+
+
+def configurar_ruta_imagenes(ruta: str, autorizado: bool = False) -> str:
+    """Cambia la carpeta de imágenes; requiere confirmación explícita del usuario."""
+    if not autorizado:
+        return "[AUTORIZACIÓN REQUERIDA: cambiar la carpeta de imágenes modifica el comportamiento de Jarvis.]"
+    destino = Path(os.path.expanduser(ruta))
+    if not destino.is_absolute():
+        return "[Error: la ruta debe ser absoluta o empezar por ~.]"
+    try:
+        config = _config_path()
+        config.parent.mkdir(parents=True, exist_ok=True)
+        values = {}
+        if config.exists():
+            values = json.loads(config.read_text(encoding="utf-8"))
+            if not isinstance(values, dict):
+                values = {}
+        values["image_directory"] = str(destino)
+        config.write_text(json.dumps(values, indent=2), encoding="utf-8")
+        destino.mkdir(parents=True, exist_ok=True)
+        return f"Ruta de imágenes configurada en: {destino}"
+    except (OSError, ValueError) as exc:
+        return f"[Error al configurar la ruta de imágenes: {exc}]"
+
+
+def crear_tool(nombre: str, codigo: str, autorizado: bool = False) -> str:
+    """Crea una herramienta Python personalizada para cargarla al reiniciar Jarvis."""
+    if not autorizado:
+        return "[AUTORIZACIÓN REQUERIDA: crear una tool ejecutará código local al reiniciar Jarvis.]"
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", nombre):
+        return "[Error: el nombre de la tool no es un identificador Python válido.]"
+    if not codigo.strip():
+        return "[Error: debes proporcionar el código de la tool.]"
+    try:
+        tree = ast.parse(codigo)
+    except SyntaxError as exc:
+        return f"[Error: el código de la tool no es válido: {exc}]"
+    if not any(
+        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == nombre
+        for node in tree.body
+    ):
+        return f"[Error: el código debe definir una función llamada '{nombre}'.]"
+    try:
+        tools_dir = Path.home() / ".config" / "jarvis" / "tools"
+        tools_dir.mkdir(parents=True, exist_ok=True)
+        tool_path = tools_dir / f"{nombre}.py"
+        tool_path.write_text(codigo.rstrip() + "\n", encoding="utf-8")
+        return f"Tool '{nombre}' creada en {tool_path}. Reinicia Jarvis para cargarla."
+    except OSError as exc:
+        return f"[Error al crear la tool: {exc}]"
+
+
+def _load_custom_tools() -> list[Callable[..., str]]:
+    """Carga tools autorizadas previamente desde la carpeta de configuración."""
+    tools_dir = Path.home() / ".config" / "jarvis" / "tools"
+    loaded: list[Callable[..., str]] = []
+    if not tools_dir.is_dir():
+        return loaded
+    for path in sorted(tools_dir.glob("*.py")):
+        spec = importlib.util.spec_from_file_location(f"jarvis_custom_{path.stem}", path)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(module)
+        except Exception as exc:
+            _LOGGER.warning("No se pudo cargar la tool personalizada %s: %s", path, exc)
+            continue
+        function = getattr(module, path.stem, None)
+        if callable(function):
+            loaded.append(function)
+    return loaded
 
 
 def _video_dir() -> Path:
@@ -52,6 +141,27 @@ def _video_dir() -> Path:
     video_dir = Path(__file__).parent / "ia-tools" / "video"
     video_dir.mkdir(parents=True, exist_ok=True)
     return video_dir
+
+
+_VEO_SUPPORTED_DURATIONS = (4, 6, 8)
+
+
+def _extract_generated_video_bytes(operation: Any) -> bytes:
+    """Extrae bytes de respuestas ``response`` y ``result`` del SDK de Veo."""
+    result = getattr(operation, "response", None)
+    if result is None:
+        result = getattr(operation, "result", None)
+    generated_videos = getattr(result, "generated_videos", None)
+    if not generated_videos:
+        raise RuntimeError("La API no devolvió ningún video.")
+
+    video = generated_videos[0].video
+    video_bytes = getattr(video, "video_bytes", None)
+    if video_bytes is None:
+        video_bytes = getattr(video, "video", None)
+    if video_bytes is None:
+        raise RuntimeError("La API no devolvió los datos del video.")
+    return video_bytes
 
 
 # ---------------------------------------------------------------------------
@@ -709,6 +819,10 @@ def generar_video(descripcion: str, duracion: int = 5, estilo: str = "") -> str:
     import time as _time
 
     prompt = f"{descripcion}. Estilo: {estilo}" if estilo.strip() else descripcion
+    try:
+        requested_duration = int(duracion)
+    except (TypeError, ValueError):
+        return "[Error: la duración del video debe ser un número entero.]"
     ts = int(_time.time() * 1_000_000)
     output_path = str(_video_dir() / f"video_{ts}.mp4")
 
@@ -720,12 +834,15 @@ def generar_video(descripcion: str, duracion: int = 5, estilo: str = "") -> str:
             from google.genai import types as _ggenai_types  # type: ignore
 
             client = _ggenai.Client(api_key=gemini_key)
+            veo_duration = min(
+                _VEO_SUPPORTED_DURATIONS,
+                key=lambda supported: abs(supported - requested_duration),
+            )
             operation = client.models.generate_videos(
-                model="veo-2.0-generate-001",
+                model=os.getenv("GEMINI_VIDEO_MODEL", "veo-3.1-fast-generate-preview"),
                 prompt=prompt,
                 config=_ggenai_types.GenerateVideosConfig(
-                    number_of_videos=1,
-                    duration_seconds=min(max(int(duracion), 5), 8),
+                    duration_seconds=veo_duration,
                     aspect_ratio="16:9",
                 ),
             )
@@ -740,7 +857,7 @@ def generar_video(descripcion: str, duracion: int = 5, estilo: str = "") -> str:
             if operation.error:
                 raise RuntimeError(str(operation.error))
 
-            video_bytes = operation.result.generated_videos[0].video.video_bytes
+            video_bytes = _extract_generated_video_bytes(operation)
             with open(output_path, "wb") as f:
                 f.write(video_bytes)
             return output_path
@@ -773,7 +890,9 @@ def generar_video(descripcion: str, duracion: int = 5, estilo: str = "") -> str:
                 raise RuntimeError(f"Tarea fallida: {task.failure}")
 
             video_url = task.output[0]
-            video_data = _req.get(video_url, timeout=60).content
+            video_response = _req.get(video_url, timeout=60)
+            video_response.raise_for_status()
+            video_data = video_response.content
             with open(output_path, "wb") as f:
                 f.write(video_data)
             return output_path
@@ -819,4 +938,9 @@ ALL_TOOLS: list[Callable[..., str]] = [
     generar_imagen,
     # video_gen_tools
     generar_video,
+    # Configuración y extensibilidad (requieren autorización en ai_agent.py)
+    configurar_ruta_imagenes,
+    crear_tool,
 ]
+
+ALL_TOOLS.extend(_load_custom_tools())
