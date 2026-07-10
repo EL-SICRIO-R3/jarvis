@@ -648,6 +648,10 @@ def generar_imagen(descripcion: str, estilo: str = "") -> str:
     import time as _time
 
     prompt = f"{descripcion}. Estilo: {estilo}" if estilo.strip() else descripcion
+    try:
+        requested_duration = int(duracion)
+    except (TypeError, ValueError):
+        return "[Error: la duración del video debe ser un número entero.]"
     ts = int(_time.time() * 1_000_000)
     output_path = str(_img_dir() / f"imagen_{ts}.png")
 
@@ -721,7 +725,7 @@ def generar_video(descripcion: str, duracion: int = 5, estilo: str = "") -> str:
 
             client = _ggenai.Client(api_key=gemini_key)
             veo_duration = min(
-                [4, 6, 8], key=lambda supported: abs(supported - int(duracion))
+                [4, 6, 8], key=lambda supported: abs(supported - requested_duration)
             )
             operation = client.models.generate_videos(
                 model=os.getenv("GEMINI_VIDEO_MODEL", "veo-3.1-fast-generate-preview"),
