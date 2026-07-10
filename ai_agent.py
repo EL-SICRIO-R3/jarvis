@@ -415,7 +415,11 @@ def _mood_context(mood: str) -> str:
 
 
 def _contextualize_message(message: str, mood: str) -> str:
-    """Añade al mensaje la guía de tono que usará el modelo de Google."""
+    """Añade al mensaje la guía de tono que usará el modelo de Google.
+
+    Se antepone a cada mensaje para que el estado del usuario module el humor
+    predeterminado de Jarvis.
+    """
     return (
         f"[Contexto de tono: {_mood_context(mood)}]\n"
         f"Mensaje del usuario: {message}"
@@ -604,18 +608,17 @@ class JarvisAgent:
             str: Respuesta textual final del asistente.
         """
         with self._lock:
-            auth_check_message = user_message
             contextualized_message = self._contextualize_user_message(user_message)
             self.last_captured_image_path = None
             self.last_generated_video_path = None
             if self._pending_authorization is not None:
-                if _AUTH_CONFIRM_RE.match(auth_check_message.lower()):
+                if _AUTH_CONFIRM_RE.match(user_message.lower()):
                     nombre, args = self._pending_authorization
                     self._pending_authorization = None
                     return self._execute_tool(
                         nombre, {**args, self._AUTHORIZATION_KEY: True}, _authorized=True
                     )
-                if _AUTH_REJECT_RE.match(auth_check_message.lower()):
+                if _AUTH_REJECT_RE.match(user_message.lower()):
                     self._pending_authorization = None
                     return "Cambio cancelado; no se modificó la configuración."
                 return "Necesito que confirmes o rechaces la autorización pendiente."
