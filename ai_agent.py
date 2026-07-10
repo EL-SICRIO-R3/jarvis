@@ -372,7 +372,7 @@ _MOOD_KEYWORDS = {
 _MOOD_PRIORITY = ("urgente", "frustrado", "triste", "cansado", "alegre")
 _MOOD_PATTERNS = {
     mood: tuple(
-        re.compile(rf"(?<!\w){re.escape(keyword)}")
+        re.compile(rf"\b{re.escape(keyword)}\b")
         for keyword in keywords
     )
     for mood, keywords in _MOOD_KEYWORDS.items()
@@ -384,8 +384,8 @@ def detect_mood(message: str) -> str:
     normalized = message.lower()
     scores = {
         mood: sum(
-            1 for keyword in keywords
-            if keyword.search(normalized)
+            1 for pattern in keywords
+            if pattern.search(normalized)
         )
         for mood, keywords in _MOOD_PATTERNS.items()
     }

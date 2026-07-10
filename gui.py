@@ -1208,7 +1208,7 @@ class JarvisWindow(_DND_BASE):
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
                 self._tts_tmpfile = f.name
 
-            mood = getattr(self._agent, "current_mood", "neutral")
+            mood = self._agent.current_mood if self._agent else "neutral"
             prosody = _MOOD_PROSODY.get(mood, _MOOD_PROSODY["neutral"])
 
             async def _gen():
