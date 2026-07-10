@@ -369,14 +369,25 @@ _MOOD_KEYWORDS = {
     "urgente": ("urgente", "rápido", "rapido", "ya mismo", "emergencia", "asap"),
     "cansado": ("cansad", "agotad", "sueño", "sueno", "no puedo más", "no puedo mas"),
 }
+_MOOD_PRIORITY = ("urgente", "frustrado", "triste", "cansado", "alegre")
 
 
 def detect_mood(message: str) -> str:
     """Detecta el tono dominante del mensaje sin enviar datos a un servicio externo."""
     normalized = message.lower()
-    for mood, keywords in _MOOD_KEYWORDS.items():
-        if any(keyword in normalized for keyword in keywords):
-            return mood
+    scores = {
+        mood: sum(
+            1 for keyword in keywords
+            if re.search(rf"(?<!\w){re.escape(keyword)}", normalized)
+        )
+        for mood, keywords in _MOOD_KEYWORDS.items()
+    }
+    best_score = max(scores.values(), default=0)
+    if best_score:
+        return next(
+            mood for mood in _MOOD_PRIORITY
+            if scores[mood] == best_score
+        )
     return "neutral"
 
 
@@ -391,6 +402,14 @@ def _mood_context(mood: str) -> str:
         "neutral": "Mantén tu personalidad habitual y ajusta el tono al contexto de la conversación.",
     }
     return instructions[mood]
+
+
+def _contextualize_message(message: str, mood: str) -> str:
+    """Añade al mensaje la guía de tono que usará el modelo de Google."""
+    return (
+        f"[Contexto de tono: {_mood_context(mood)}]\n"
+        f"Mensaje del usuario: {message}"
+    )
 
 
 SYSTEM_PROMPT = """Eres Jarvis, el asistente personal de IA más payaso y random del universo conocido (y desconocido).
@@ -572,9 +591,8 @@ class JarvisAgent:
         with self._lock:
             original_message = user_message
             self._current_mood = detect_mood(user_message)
-            user_message = (
-                f"[Contexto de tono: {_mood_context(self._current_mood)}]\n"
-                f"Mensaje del usuario: {user_message}"
+            contextualized_message = _contextualize_message(
+                user_message, self._current_mood
             )
             self.last_captured_image_path = None
             self.last_generated_video_path = None
@@ -590,8 +608,8 @@ class JarvisAgent:
                     return "Cambio cancelado; no se modificó la configuración."
                 return "Necesito que confirmes o rechaces la autorización pendiente."
             if self._provider == "gemini":
-                return self._send_gemini(user_message)
-            return self._send_openai(user_message)
+                return self._send_gemini(contextualized_message)
+            return self._send_openai(contextualized_message)
 
     def send_message_with_image(self, user_message: str, image_path: str) -> str:
         """Envía un mensaje con imagen al LLM (visión multimodal).
@@ -605,15 +623,18 @@ class JarvisAgent:
         """
         with self._lock:
             self._current_mood = detect_mood(user_message)
-            user_message = (
-                f"[Contexto de tono: {_mood_context(self._current_mood)}]\n"
-                f"Mensaje del usuario: {user_message}"
+            contextualized_message = _contextualize_message(
+                user_message, self._current_mood
             )
             self.last_captured_image_path = None
             self.last_generated_video_path = None
             if self._provider == "gemini":
-                return self._send_gemini_with_image(user_message, image_path)
-            return self._send_openai_with_image(user_message, image_path)
+                return self._send_gemini_with_image(
+                    contextualized_message, image_path
+                )
+            return self._send_openai_with_image(
+                contextualized_message, image_path
+            )
 
     # ------------------------------------------------------------------
     # Implementación por proveedor
