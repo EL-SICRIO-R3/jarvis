@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import asyncio
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -49,7 +50,7 @@ class TelegramBridge:
             await message.reply_text("Historial reiniciado.")
             return
         try:
-            reply = await __import__("asyncio").to_thread(self.agent.send_message, text)
+            reply = await asyncio.to_thread(self.agent.send_message, text)
         except Exception as exc:  # noqa: BLE001
             _LOGGER.exception("Error procesando mensaje de Telegram")
             reply = f"[Error procesando la instrucción: {exc}]"
@@ -72,7 +73,7 @@ class TelegramBridge:
         try:
             with Path(path).open("rb") as file:
                 await message.reply_document(document=file)
-        except Exception:  # noqa: BLE001
+        except (OSError, ValueError):
             _LOGGER.exception("No se pudo enviar el archivo generado por Jarvis")
 
     async def run(self) -> None:
@@ -89,7 +90,7 @@ class TelegramBridge:
         await application.start()
         await application.updater.start_polling()
         try:
-            await __import__("asyncio").Event().wait()
+            await asyncio.Event().wait()
         finally:
             await application.updater.stop()
             await application.stop()
@@ -101,7 +102,6 @@ def start_telegram_bot(agent: object) -> bool:
     token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     if not token:
         return False
-    import asyncio
     import threading
 
     def _run() -> None:

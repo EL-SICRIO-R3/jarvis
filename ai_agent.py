@@ -577,6 +577,7 @@ class JarvisAgent:
         last_tool_result = ""
 
         # Ciclo de function calling
+        # Evita ciclos infinitos si el proveedor insiste en llamar tools.
         for _ in range(8):
             # Recolectar todas las llamadas a herramientas de la respuesta
             tool_calls = [
@@ -665,6 +666,7 @@ class JarvisAgent:
 
         # Ciclo de function calling (igual que _send_gemini)
         last_tool_result = ""
+        # Evita ciclos infinitos si el proveedor insiste en llamar tools.
         for _ in range(8):
             tool_calls = [
                 part.function_call
