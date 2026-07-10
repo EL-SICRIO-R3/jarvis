@@ -5,8 +5,14 @@ from __future__ import annotations
 import logging
 import os
 import asyncio
+from io import BytesIO
 from pathlib import Path
+from typing import TYPE_CHECKING
 from dotenv import load_dotenv
+
+if TYPE_CHECKING:
+    from telegram import Update
+    from telegram.ext import ContextTypes
 
 load_dotenv()
 _LOGGER = logging.getLogger(__name__)
@@ -33,7 +39,9 @@ class TelegramBridge:
         self.token = token or os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
         self.allowed_chat_ids = _allowed_chat_ids()
 
-    async def handle_message(self, update: object, context: object) -> None:
+    async def handle_message(
+        self, update: "Update", context: "ContextTypes.DEFAULT_TYPE"
+    ) -> None:
         message = getattr(update, "effective_message", None)
         chat = getattr(update, "effective_chat", None)
         text = (getattr(message, "text", None) or "").strip()
@@ -72,7 +80,9 @@ class TelegramBridge:
             return
         try:
             contents = Path(path).read_bytes()
-            await message.reply_document(document=contents, filename=Path(path).name)
+            await message.reply_document(
+                document=BytesIO(contents), filename=Path(path).name
+            )
         except (OSError, ValueError):
             _LOGGER.exception("No se pudo enviar el archivo generado por Jarvis")
 
@@ -107,5 +117,7 @@ def start_telegram_bot(agent: object) -> bool:
     def _run() -> None:
         asyncio.run(TelegramBridge(agent, token).run())
 
-    threading.Thread(target=_run, name="jarvis-telegram", daemon=True).start()
+    thread = threading.Thread(target=_run, name="jarvis-telegram", daemon=True)
+    thread.start()
+    agent._telegram_thread = thread  # type: ignore[attr-defined]
     return True

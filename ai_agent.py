@@ -580,7 +580,7 @@ class JarvisAgent:
 
         # Ciclo de function calling
         # Evita ciclos infinitos si el proveedor insiste en llamar tools.
-        for _ in range(_MAX_TOOL_CALL_ITERATIONS):
+        for _iteration in range(_MAX_TOOL_CALL_ITERATIONS):
             # Recolectar todas las llamadas a herramientas de la respuesta
             tool_calls = [
                 part.function_call
@@ -642,10 +642,7 @@ class JarvisAgent:
                 part_text = str(getattr(part, "text", "") or "").strip()
                 if part_text:
                     return part_text
-        return fallback or (
-            "[El modelo terminó sin devolver texto. Intenta reformular la instrucción "
-            "o verifica la conexión con el modelo.]"
-        )
+        return fallback or "[El modelo terminó sin devolver texto. Intenta reformular la instrucción o verifica la conexión con el modelo.]"
 
     def _send_gemini_with_image(self, user_message: str, image_path: str) -> str:
         """Envía texto + imagen a Gemini (visión multimodal)."""
@@ -672,7 +669,7 @@ class JarvisAgent:
         # Ciclo de function calling (igual que _send_gemini)
         last_tool_result = ""
         # Evita ciclos infinitos si el proveedor insiste en llamar tools.
-        for _ in range(_MAX_TOOL_CALL_ITERATIONS):
+        for _iteration in range(_MAX_TOOL_CALL_ITERATIONS):
             tool_calls = [
                 part.function_call
                 for candidate in response.candidates
