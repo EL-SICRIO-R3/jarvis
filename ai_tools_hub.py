@@ -18,7 +18,7 @@ import os
 import platform
 import subprocess
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ def _video_dir() -> Path:
 _VEO_SUPPORTED_DURATIONS = (4, 6, 8)
 
 
-def _extract_generated_video_bytes(operation) -> bytes:
+def _extract_generated_video_bytes(operation: Any) -> bytes:
     """Extrae bytes de respuestas ``response`` y ``result`` del SDK de Veo."""
     result = getattr(operation, "response", None)
     if result is None:
