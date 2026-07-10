@@ -18,6 +18,16 @@ load_dotenv()
 _LOGGER = logging.getLogger(__name__)
 _MAX_MESSAGE_LENGTH = 4096
 
+try:
+    import truststore
+
+    truststore.inject_into_ssl()
+except ImportError:
+    _LOGGER.warning(
+        "No se pudo cargar truststore; en macOS podrían aparecer "
+        "errores SSL. Instálalo con: python -m pip install truststore"
+    )
+
 
 def _allowed_chat_ids() -> set[int]:
     values = os.getenv("TELEGRAM_ALLOWED_CHAT_IDS", "")
@@ -97,15 +107,6 @@ class TelegramBridge:
         """Ejecuta el polling hasta que el proceso sea detenido."""
         if not self.token:
             raise ValueError("Define TELEGRAM_BOT_TOKEN para activar Telegram.")
-        try:
-            import truststore
-
-            truststore.inject_into_ssl()
-        except ImportError:
-            _LOGGER.warning(
-                "No se pudo cargar truststore; en macOS podrían aparecer "
-                "errores SSL. Instálalo con: python -m pip install truststore"
-            )
         from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
         application = Application.builder().token(self.token).build()

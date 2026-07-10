@@ -142,8 +142,8 @@ python -m pip install -r requirements.txt
 ```
 
 En macOS instalado desde python.org, ejecuta también `Install
-Certificates.command`, incluido normalmente en `/Applications/Python 3.x/`,
-y vuelve a iniciar Jarvis.
+Certificates.command`, incluido normalmente en `/Applications/Python 3.x/`
+(sustituye `3.x` por tu versión instalada), y vuelve a iniciar Jarvis.
 
 Al arrancar verás en la terminal:
 
