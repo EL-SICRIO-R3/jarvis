@@ -423,6 +423,7 @@ class JarvisAgent:
     # Herramientas que guardan archivos (resultado incluye la ruta absoluta)
     _SAVE_TOOLS = frozenset({"guardar_documento", "guardar_nota", "create_file"})
     _AUTHORIZED_TOOLS = frozenset({"configurar_ruta_imagenes", "crear_tool"})
+    _AUTHORIZATION_KEY = "autorizado"
 
     def __init__(self, provider: Optional[str] = None) -> None:
         self._provider = self._resolve_provider(provider)
@@ -522,7 +523,7 @@ class JarvisAgent:
                 nombre, args = self._pending_authorization
                 self._pending_authorization = None
                 return self._execute_tool(
-                    nombre, {**args, "autorizado": True}, _authorized=True
+                    nombre, {**args, self._AUTHORIZATION_KEY: True}, _authorized=True
                 )
             if re.match(
                 r"^\s*(?:no\s+(?:autorizo|quiero|lo hagas)|cancel(?:ar|o)|rechazo)(?:\s|[.!,:;]|$)",
@@ -865,7 +866,10 @@ class JarvisAgent:
         if func is None:
             return f"[Herramienta '{nombre}' no encontrada.]"
         if nombre in self._AUTHORIZED_TOOLS and not _authorized:
-            pending_args = {key: value for key, value in args.items() if key != "autorizado"}
+            pending_args = {
+                key: value for key, value in args.items()
+                if key != self._AUTHORIZATION_KEY
+            }
             self._pending_authorization = (nombre, pending_args)
             return (
                 f"[AUTORIZACIÓN REQUERIDA para '{nombre}'. "

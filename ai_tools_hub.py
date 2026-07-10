@@ -17,11 +17,15 @@ from __future__ import annotations
 import os
 import platform
 import subprocess
+import ast
 import json
 import importlib.util
+import logging
 import re
 from pathlib import Path
 from typing import Any, Callable
+
+_LOGGER = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +94,15 @@ def crear_tool(nombre: str, codigo: str, autorizado: bool = False) -> str:
     if not codigo.strip():
         return "[Error: debes proporcionar el código de la tool.]"
     try:
+        tree = ast.parse(codigo)
+    except SyntaxError as exc:
+        return f"[Error: el código de la tool no es válido: {exc}]"
+    if not any(
+        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == nombre
+        for node in tree.body
+    ):
+        return f"[Error: el código debe definir una función llamada '{nombre}'.]"
+    try:
         tools_dir = Path.home() / ".config" / "jarvis" / "tools"
         tools_dir.mkdir(parents=True, exist_ok=True)
         tool_path = tools_dir / f"{nombre}.py"
@@ -112,7 +125,8 @@ def _load_custom_tools() -> list[Callable[..., str]]:
         module = importlib.util.module_from_spec(spec)
         try:
             spec.loader.exec_module(module)
-        except Exception:
+        except Exception as exc:
+            _LOGGER.warning("No se pudo cargar la tool personalizada %s: %s", path, exc)
             continue
         function = getattr(module, path.stem, None)
         if callable(function):
