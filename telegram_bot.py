@@ -51,7 +51,7 @@ class TelegramBridge:
             return
         try:
             reply = await asyncio.to_thread(self.agent.send_message, text)
-        except Exception as exc:  # noqa: BLE001
+        except (OSError, RuntimeError, ValueError) as exc:
             _LOGGER.exception("Error procesando mensaje de Telegram")
             reply = f"[Error procesando la instrucción: {exc}]"
         await self._reply_chunks(message, reply)
@@ -71,8 +71,8 @@ class TelegramBridge:
         if not path or not Path(path).is_file():
             return
         try:
-            with Path(path).open("rb") as file:
-                await message.reply_document(document=file)
+            contents = Path(path).read_bytes()
+            await message.reply_document(document=contents, filename=Path(path).name)
         except (OSError, ValueError):
             _LOGGER.exception("No se pudo enviar el archivo generado por Jarvis")
 
