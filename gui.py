@@ -236,12 +236,29 @@ class JarvisWindow(_DND_BASE):
 
         # ── Cuadro de diálogo de texto (oculto por defecto) ───────────────
         self._text_input_frame = tk.Frame(bottom, bg="black")
-        self._text_entry = tk.Entry(
-            self._text_input_frame,
-            bg="#1C1C1E", fg="#EBEBF5", insertbackground="#1A6FFF",
-            font=("Helvetica Neue", 13), relief="flat", bd=0,
+        self._text_dialog_canvas = tk.Canvas(
+            self._text_input_frame, height=58, bg="black",
+            highlightthickness=0,
         )
-        self._text_entry.pack(side="left", padx=(12, 8), ipady=6,
+        self._text_dialog_canvas.pack(fill="x", padx=24, pady=(0, 12))
+        self._text_dialog_content = tk.Frame(
+            self._text_dialog_canvas, bg="#111214", height=52
+        )
+        self._text_dialog_window = self._text_dialog_canvas.create_window(
+            3, 3, anchor="nw", window=self._text_dialog_content,
+            width=1, height=52,
+        )
+        self._text_dialog_canvas.bind(
+            "<Configure>", self._draw_text_dialog, add="+"
+        )
+        self._text_entry = tk.Entry(
+            self._text_dialog_content,
+            bg="#17181B", fg="#EBEBF5", insertbackground="#5B9BFF",
+            font=("Helvetica Neue", 13), relief="flat", bd=0,
+            highlightthickness=1, highlightbackground="#2A2D33",
+            highlightcolor="#3A6EA5",
+        )
+        self._text_entry.pack(side="left", padx=(12, 8), ipady=6, pady=9,
                               expand=True, fill="x")
         self._text_entry.bind("<Return>", lambda _e: self._send_text_input())
         _sPW, _sPH = 80, 34
@@ -254,7 +271,7 @@ class JarvisWindow(_DND_BASE):
         self._draw_send_pill()
 
         # ── Pausa junto al botón enviar ───────────────────────────────────
-        self._btns_row = self._text_input_frame
+        self._btns_row = self._text_dialog_content
         _PW, _PH = 36, 34
         self._pill_w, self._pill_h = _PW, _PH
         self._pill = tk.Canvas(
@@ -1332,15 +1349,60 @@ class JarvisWindow(_DND_BASE):
         c.create_text(W // 2, H // 2, text="ENVIAR", fill="white",
                       font=("Helvetica Neue", 11, "bold"))
 
+    def _draw_text_dialog(self, event=None) -> None:
+        """Dibuja el contenedor redondeado del cuadro de texto."""
+        c = self._text_dialog_canvas
+        width = c.winfo_width()
+        if width < 10:
+            return
+
+        c.delete("dialog_background")
+        x1, y1, x2, y2 = 1, 1, width - 2, 56
+        radius = 14
+
+        def _rounded_box(
+            left: int, top: int, right: int, bottom: int,
+            fill: str, tag: str,
+        ) -> None:
+            r = min(radius, (right - left) // 2, (bottom - top) // 2)
+            c.create_rectangle(
+                left + r, top, right - r, bottom,
+                fill=fill, outline="", tags=tag,
+            )
+            c.create_rectangle(
+                left, top + r, right, bottom - r,
+                fill=fill, outline="", tags=tag,
+            )
+            for ax1, ay1, ax2, ay2, start in (
+                (left, top, left + 2 * r, top + 2 * r, 90),
+                (right - 2 * r, top, right, top + 2 * r, 0),
+                (left, bottom - 2 * r, left + 2 * r, bottom, 180),
+                (right - 2 * r, bottom - 2 * r, right, bottom, 270),
+            ):
+                c.create_arc(
+                    ax1, ay1, ax2, ay2, start=start, extent=90,
+                    fill=fill, outline="", tags=tag,
+                )
+
+        _rounded_box(x1, y1, x2, y2, "#2A2D33", "dialog_background")
+        _rounded_box(x1 + 1, y1 + 1, x2 - 1, y2 - 1,
+                     "#111214", "dialog_background")
+        c.tag_lower("dialog_background")
+        c.itemconfigure(
+            self._text_dialog_window,
+            width=max(1, width - 6),
+            height=52,
+        )
+
     # ── Modo texto ──────────────────────────────────────────────────────────
     def _set_text_mode(self, enabled: bool) -> None:
         """Muestra u oculta el cuadro de diálogo de texto."""
         self._text_mode = enabled
         if enabled:
-            self._text_input_frame.pack(fill="x", pady=(4, 2))
+            self._text_input_frame.pack(fill="x", pady=(4, 12))
             if not self._widget_mode:
                 x, y = self.winfo_x(), self.winfo_y()
-                self.geometry(f"{_W}x{_H + 50}+{x}+{y}")
+                self.geometry(f"{_W}x{_H + 76}+{x}+{y}")
             self._text_entry.focus_set()
         else:
             self._text_input_frame.pack_forget()
