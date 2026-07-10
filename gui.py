@@ -1349,13 +1349,13 @@ class JarvisWindow(_DND_BASE):
         c.create_line(R, 0, W - R, 0, fill=bdr, width=1)
         c.create_line(R, H - 1, W - R, H - 1, fill=bdr, width=1)
         # Paper-plane icon coordinates are relative to the 34x34 canvas.
-        icon_points = (10, 17, 24, 10, 19, 24, 16, 18)
+        paper_plane_polygon_points = (10, 17, 24, 10, 19, 24, 16, 18)
         c.create_polygon(
-            *icon_points,
+            *paper_plane_polygon_points,
             fill="white", outline="",
         )
-        icon_fold = (10, 17, 16, 18)
-        c.create_line(*icon_fold, fill=bg, width=1)
+        paper_plane_fold_line = (10, 17, 16, 18)
+        c.create_line(*paper_plane_fold_line, fill=bg, width=1)
 
     def _draw_text_dialog(self, event=None) -> None:
         """Dibuja el contenedor redondeado del cuadro de texto."""
