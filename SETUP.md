@@ -99,6 +99,8 @@ Abre `.env` y agrega al menos una clave:
 ```env
 # Proveedor principal — Google Gemini (recomendado)
 GEMINI_API_KEY=tu_clave_aqui
+# Modelo opcional para las voces Gemini TTS
+# GEMINI_TTS_MODEL=gemini-2.5-flash-preview-tts
 
 # Proveedor alternativo — OpenAI (fallback)
 # OPENAI_API_KEY=tu_clave_aqui
@@ -107,14 +109,11 @@ GEMINI_API_KEY=tu_clave_aqui
 # TELEGRAM_BOT_TOKEN=pega_aqui_el_token_de_BotFather
 # TELEGRAM_ALLOWED_CHAT_IDS=123456789,987654321
 
-# Voz ultra-natural — ElevenLabs TTS (opcional, recomendado)
-# ELEVENLABS_API_KEY=tu_clave_aqui
 ```
 
 > **¿Dónde obtengo la clave?**
 > - Gemini: [Google AI Studio → API Keys](https://aistudio.google.com/app/apikey)
 > - OpenAI: [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-> - ElevenLabs: [elevenlabs.io/app/settings/api-keys](https://elevenlabs.io/app/settings/api-keys)
 
 ---
 

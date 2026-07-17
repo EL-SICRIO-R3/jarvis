@@ -139,7 +139,7 @@ Ejecutar herramienta(s) en tools.py              Texto final
    ▼                                                     │
 Devolver resultado al LLM ────────────────────────────► │
                                                          ▼
-                                               [TTS] edge-tts sintetiza voz
+                                               [TTS] voz local sintetiza voz
                                                          │
                                                          ▼
                                                Jarvis responde en audio
@@ -347,7 +347,7 @@ jarvis/
 - El historial de conversación **no persiste** entre sesiones (se reinicia al cerrar)
 - La visión multimodal solo está disponible con el proveedor **Gemini**
 - La herramienta `abrir_aplicacion` en Windows usa `start` por shell; algunos programas con espacios en el nombre pueden requerir ajustes
-- El TTS neural (`edge-tts`) requiere conexión a internet; en modo offline usa `pyttsx3` con voces del sistema
+- La configuración de voz incluye voces Edge TTS y voces neuronales de Google Gemini; `pyttsx3` permite el fallback offline
 - No hay soporte para comandos que requieran autenticación en servicios externos (correo, calendario, etc.)
 - La ventana es de tamaño **fijo** (860 × 620 px) y no es redimensionable
 

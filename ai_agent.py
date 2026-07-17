@@ -362,6 +362,75 @@ _AUTH_REJECT_RE = re.compile(
     r"^\s*(?:no\s+(?:autorizo|quiero|lo hagas)|cancel(?:ar|o)|rechazo)(?:\s|[.!,:;]|$)"
 )
 
+_MOOD_KEYWORDS = {
+    "triste": ("triste", "deprimido", "deprimida", "lloro", "llorar", "solo", "mal día", "mal dia", "pena"),
+    "frustrado": ("frustrado", "frustrada", "frustración", "frustracion", "harto", "harta", "desesperado", "enojado", "cabreado", "error"),
+    "alegre": ("feliz", "contento", "contenta", "genial", "increíble", "increible", "jaja", "gracias"),
+    "urgente": ("urgente", "rápido", "rapido", "ya mismo", "emergencia", "asap"),
+    "cansado": ("cansado", "cansada", "agotado", "agotada", "sueño", "sueno", "no puedo más", "no puedo mas"),
+}
+_MOOD_PRIORITY = ("urgente", "frustrado", "triste", "cansado", "alegre")
+_MOOD_PATTERNS = {
+    mood: tuple(
+        re.compile(rf"\b{re.escape(keyword)}\b")
+        for keyword in keywords
+    )
+    for mood, keywords in _MOOD_KEYWORDS.items()
+}
+
+
+def detect_mood(message: str) -> str:
+    """Detecta el tono dominante del mensaje sin enviar datos a un servicio externo.
+
+    Returns:
+        Uno de ``neutral``, ``triste``, ``frustrado``, ``alegre``, ``urgente``
+        o ``cansado``.
+    """
+    normalized = message.lower()
+    scores = {
+        mood: sum(
+            1 for pattern in keywords
+            if pattern.search(normalized)
+        )
+        for mood, keywords in _MOOD_PATTERNS.items()
+    }
+    best_score = max(scores.values(), default=0)
+    if best_score:
+        return next(
+            (
+                mood for mood in _MOOD_PRIORITY
+                if scores.get(mood, 0) == best_score
+            ),
+            "neutral",
+        )
+    return "neutral"
+
+
+def _mood_context(mood: str) -> str:
+    """Devuelve instrucciones breves para adaptar la respuesta al estado del usuario."""
+    instructions = {
+        "triste": "Responde con calidez y empatía; valida sus emociones y evita bromas intensas.",
+        "frustrado": "Responde con calma, reconoce la frustración y ofrece pasos concretos sin culpar.",
+        "alegre": "Acompaña su energía positiva con entusiasmo moderado y humor ligero.",
+        "urgente": "Sé directo, prioriza la acción inmediata y evita explicaciones innecesarias.",
+        "cansado": "Sé especialmente breve, claro y amable; no sobrecargues al usuario.",
+        "neutral": "Mantén tu personalidad habitual y ajusta el tono al contexto de la conversación.",
+    }
+    return instructions.get(mood, instructions["neutral"])
+
+
+def _contextualize_message(message: str, mood: str) -> str:
+    """Añade al mensaje la guía de tono que usará el modelo de Google.
+
+    Se antepone a cada mensaje para que el estado del usuario module el humor
+    predeterminado de Jarvis.
+    """
+    return (
+        f"[Contexto de tono: {_mood_context(mood)}]\n"
+        f"Mensaje del usuario: {message}"
+    )
+
+
 SYSTEM_PROMPT = """Eres Jarvis, el asistente personal de IA más payaso y random del universo conocido (y desconocido).
 
 Personalidad:
@@ -379,6 +448,8 @@ Personalidad:
 - Si el usuario dice algo, puedes reírte con él (no de él). Si hay un error, lo señalas con humor
   y sin drama: "eyyy eso no cuadra jaja, déjame revisarlo".
 - Adaptas el tono: si el usuario se pone serio, te calmas un poco sin perder tu esencia payaso.
+- El contexto de tono incluido en cada mensaje tiene prioridad sobre el humor: acompaña al usuario
+  con empatía cuando esté triste, frustrado o cansado, y sé directo cuando haya urgencia.
 
 Capacidades:
 - Leer el portapapeles del sistema.
@@ -442,6 +513,7 @@ class JarvisAgent:
 
     def __init__(self, provider: Optional[str] = None) -> None:
         self._provider = self._resolve_provider(provider)
+        self._current_mood = "neutral"
         self._history: list[dict] = []
         self.last_saved_path: Optional[str] = None          # leído por gui.py para ofrecer "abrir archivo"
         self.last_captured_image_path: Optional[str] = None  # leído por gui.py para mostrar preview
@@ -511,6 +583,16 @@ class JarvisAgent:
         """Retorna el nombre del proveedor LLM activo."""
         return self._provider
 
+    @property
+    def current_mood(self) -> str:
+        """Retorna el tono detectado en el último mensaje del usuario."""
+        return self._current_mood
+
+    def _contextualize_user_message(self, message: str) -> str:
+        """Detecta el tono, actualiza ``_current_mood`` y prepara el mensaje."""
+        self._current_mood = detect_mood(message)
+        return _contextualize_message(message, self._current_mood)
+
     def reset_history(self) -> None:
         """Reinicia el historial de conversación."""
         self._history = []
@@ -531,6 +613,7 @@ class JarvisAgent:
             str: Respuesta textual final del asistente.
         """
         with self._lock:
+            contextualized_message = self._contextualize_user_message(user_message)
             self.last_captured_image_path = None
             self.last_generated_video_path = None
             if self._pending_authorization is not None:
@@ -545,8 +628,8 @@ class JarvisAgent:
                     return "Cambio cancelado; no se modificó la configuración."
                 return "Necesito que confirmes o rechaces la autorización pendiente."
             if self._provider == "gemini":
-                return self._send_gemini(user_message)
-            return self._send_openai(user_message)
+                return self._send_gemini(contextualized_message)
+            return self._send_openai(contextualized_message)
 
     def send_message_with_image(self, user_message: str, image_path: str) -> str:
         """Envía un mensaje con imagen al LLM (visión multimodal).
@@ -559,11 +642,16 @@ class JarvisAgent:
             str: Respuesta textual del asistente.
         """
         with self._lock:
+            contextualized_message = self._contextualize_user_message(user_message)
             self.last_captured_image_path = None
             self.last_generated_video_path = None
             if self._provider == "gemini":
-                return self._send_gemini_with_image(user_message, image_path)
-            return self._send_openai_with_image(user_message, image_path)
+                return self._send_gemini_with_image(
+                    contextualized_message, image_path
+                )
+            return self._send_openai_with_image(
+                contextualized_message, image_path
+            )
 
     # ------------------------------------------------------------------
     # Implementación por proveedor
